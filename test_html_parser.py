@@ -1,251 +1,122 @@
+#%%
 import pytest
 
-from html_parser import TagToRemoveWithContent, parse_html
-
-example_basic = (
-    """
-<html>
-  <head>
-    <title>Href Attribute Example title</title>
-  </head>
-  <body>
-    <h1>The AI community building the future.</h1>
-    <p>
-Transformers is our natural language processing library and our hub is now open to all ML models, with support from libraries like <a target="_blank" class="underline" href="https://github.com/flairNLP/flair">Flair</a>, <a target="_blank" class="underline" href="https://github.com/asteroid-team/asteroid">Asteroid</a>, <a target="_blank" class="underline" href="https://github.com/espnet/espnet">ESPnet</a>, <a target="_blank" class="underline" href="https://github.com/pyannote/pyannote-audio">Pyannote</a>, and more to come.
-</p>
-  </body>
-</html>
-""",
-    """The AI community building the future. 
-Transformers is our natural language processing library and our hub is now open to all ML models, with support from libraries like Flair, Asteroid, ESPnet, Pyannote, and more to come.
-""",
-    {},
-)
-
-example_basic_with_spaces_and_line_breaks = (
-    """
-<html>
-  <head>
-    <title>Href Attribute Example title</title>
-  </head>
-  <body>
-    <h1>The AI community building the future.</h1>
-    <p>
-Transformers is our natural language processing library and our hub
-    is now open to all ML models, with support from libraries like
-    <a target="_blank" class="underline" href="https://github.com/flairNLP/flair">Flair</a>,
-    <a target="_blank" class="underline" href="https://github.com/asteroid-team/asteroid">Asteroid</a>,
-    <a target="_blank" class="underline" href="https://github.com/espnet/espnet">ESPnet</a>,
-    <a target="_blank" class="underline" href="https://github.com/pyannote/pyannote-audio">Pyannote</a>, and more to come.
-</p>
-  </body>
-</html>
-""",
-    """The AI community building the future. 
-Transformers is our natural language processing library and our hub
-    is now open to all ML models, with support from libraries like
-    Flair,
-    Asteroid,
-    ESPnet,
-    Pyannote, and more to come.
-""",
-    {},
-)
-example_text_separator = (
-    """
-<html>
-  <head>
-    <title>Href Attribute Example title</title>
-  </head>
-  <body>
-    <h1>The AI community building the future.</h1>
-    <p>
-Transformers is our natural language processing library and our hub is now open to all ML models, with support from libraries like <a target="_blank" class="underline" href="https://github.com/flairNLP/flair">Flair</a>, <a target="_blank" class="underline" href="https://github.com/asteroid-team/asteroid">Asteroid</a>, <a target="_blank" class="underline" href="https://github.com/espnet/espnet">ESPnet</a>, <a target="_blank" class="underline" href="https://github.com/pyannote/pyannote-audio">Pyannote</a>, and more to come.
-</p>
-  </body>
-</html>
-""",
-    """The AI community building the future.|
-Transformers is our natural language processing library and our hub is now open to all ML models, with support from libraries like Flair, Asteroid, ESPnet, Pyannote, and more to come.
-""",
-    {"text_separator": "|"},
-)
-example_tags_to_remove_with_content = (
-    """
-<html>
-  <head>
-    <title>Href Attribute Example title</title>
-  </head>
-  <body>
-    <h1>The AI community building the future.</h1>
-    <p>
-Transformers is our natural language processing library and our hub is now open to all ML models, with support from libraries like <a target="_blank" class="underline" href="https://github.com/flairNLP/flair">Flair</a>, <a target="_blank" class="underline" href="https://github.com/asteroid-team/asteroid">Asteroid</a>, <a target="_blank" class="underline" href="https://github.com/espnet/espnet">ESPnet</a>, <a target="_blank" class="underline" href="https://github.com/pyannote/pyannote-audio">Pyannote</a>, and more to come.
-</p>
-  </body>
-</html>
-""",
-    """The AI community building the future.""",
-    {"tags_to_remove_with_content": [TagToRemoveWithContent("p")]},
-)
-example_tags_to_remove_with_content_nested = (
-    """
-<html>
-  <head>
-    <title>Href Attribute Example title</title>
-  </head>
-  <body>
-    <h1>The AI community building the future.</h1>
-    <div>
-Transformers is our natural language processing <div>library and our hub is</div> now open to all ML models, with support from libraries like <a target="_blank" class="underline" href="https://github.com/flairNLP/flair">Flair</a>, <a target="_blank" class="underline" href="https://github.com/asteroid-team/asteroid">Asteroid</a>, <a target="_blank" class="underline" href="https://github.com/espnet/espnet">ESPnet</a>, <a target="_blank" class="underline" href="https://github.com/pyannote/pyannote-audio">Pyannote</a>, and more to come.
-</div>
-  </body>
-</html>
-""",
-    """The AI community building the future.""",
-    {"tags_to_remove_with_content": [TagToRemoveWithContent("div")]},
-)
-example_tags_to_remove_with_content_nested_if_short = (
-    """
-<html>
-  <head>
-    <title>Href Attribute Example title</title>
-  </head>
-  <body>
-    <h1>The AI community building the future.</h1>
-    <div>
-Transformers is our natural language processing <div>library and our hub is</div> now open to all ML models, with support from libraries like <a target="_blank" class="underline" href="https://github.com/flairNLP/flair">Flair</a>, <a target="_blank" class="underline" href="https://github.com/asteroid-team/asteroid">Asteroid</a>, <a target="_blank" class="underline" href="https://github.com/espnet/espnet">ESPnet</a>, <a target="_blank" class="underline" href="https://github.com/pyannote/pyannote-audio">Pyannote</a>, and more to come.
-</div>
-  </body>
-</html>
-""",
-    """The AI community building the future. 
-Transformers is our natural language processing  now open to all ML models, with support from libraries like Flair, Asteroid, ESPnet, Pyannote, and more to come.
-""",
-    {
-        "tags_to_remove_with_content": [
-            TagToRemoveWithContent("div", content_max_char_length=23)
-        ],
-    },
-)
-example_tags_to_remove_with_content_nested_if_long = (
-    """
-<html>
-  <head>
-    <title>Href Attribute Example title</title>
-  </head>
-  <body>
-    <h1>The AI community building the future.</h1>
-    <div>
-Transformers is our natural language processing <div>library and our hub is</div> now open to all ML models, with support from libraries like <a target="_blank" class="underline" href="https://github.com/flairNLP/flair">Flair</a>, <a target="_blank" class="underline" href="https://github.com/asteroid-team/asteroid">Asteroid</a>, <a target="_blank" class="underline" href="https://github.com/espnet/espnet">ESPnet</a>, <a target="_blank" class="underline" href="https://github.com/pyannote/pyannote-audio">Pyannote</a>, and more to come.
-</div>
-  </body>
-</html>
-""",
-    """The AI community building the future.""",
-    {
-        "tags_to_remove_with_content": [
-            TagToRemoveWithContent("div", content_min_char_length=23)
-        ],
-    },
-)
-example_tags_to_remove_with_content_if_long = (
-    """
-<html>
-  <head>
-    <title>Href Attribute Example title</title>
-  </head>
-  <body>
-    <h1>The AI community building the future.</h1>
-    <div>
-Transformers is our natural language processing library and our hub is now open to all ML models, with support from libraries like <a target="_blank" class="underline" href="https://github.com/flairNLP/flair">Flair</a>, <a target="_blank" class="underline" href="https://github.com/asteroid-team/asteroid">Asteroid</a>, <a target="_blank" class="underline" href="https://github.com/espnet/espnet">ESPnet</a>, <a target="_blank" class="underline" href="https://github.com/pyannote/pyannote-audio">Pyannote</a>, and more to come.
-</div>
-    <div>
-Go to the hub
-</div>
-  </body>
-</html>
-""",
-    """The AI community building the future.
-Go to the hub
-""",
-    {
-        "tags_to_remove_with_content": [
-            TagToRemoveWithContent("div", content_min_char_length=23)
-        ],
-    },
-)
-example_tags_to_remove_with_content_if_short = (
-    """
-<html>
-  <head>
-    <title>Href Attribute Example title</title>
-  </head>
-  <body>
-    <h1>The AI community building the future.</h1>
-    <div>
-Transformers is our natural language processing library and our hub is now open to all ML models, with support from libraries like <a target="_blank" class="underline" href="https://github.com/flairNLP/flair">Flair</a>, <a target="_blank" class="underline" href="https://github.com/asteroid-team/asteroid">Asteroid</a>, <a target="_blank" class="underline" href="https://github.com/espnet/espnet">ESPnet</a>, <a target="_blank" class="underline" href="https://github.com/pyannote/pyannote-audio">Pyannote</a>, and more to come.
-</div>
-    <div>
-Go to the hub
-</div>
-  </body>
-</html>
-""",
-    """The AI community building the future. 
-Transformers is our natural language processing library and our hub is now open to all ML models, with support from libraries like Flair, Asteroid, ESPnet, Pyannote, and more to come.
-""",
-    {
-        "tags_to_remove_with_content": [
-            TagToRemoveWithContent("div", content_max_char_length=23)
-        ],
-    },
-)
-example_tags_to_remove_with_content_if_short_and_long = (
-    """
-<html>
-  <head>
-    <title>Href Attribute Example title</title>
-  </head>
-  <body>
-    <h1>The AI community building the future.</h1>
-    <div>
-Transformers is our natural language processing library and our hub is now open to all ML models, with support from libraries like <a target="_blank" class="underline" href="https://github.com/flairNLP/flair">Flair</a>, <a target="_blank" class="underline" href="https://github.com/asteroid-team/asteroid">Asteroid</a>, <a target="_blank" class="underline" href="https://github.com/espnet/espnet">ESPnet</a>, <a target="_blank" class="underline" href="https://github.com/pyannote/pyannote-audio">Pyannote</a>, and more to come.
-</div>
-    <div>
-Go to the hub
-</div>
-    <div>
-Go
-</div>
-  </body>
-</html>
-""",
-    """The AI community building the future.
-Go
-""",
-    {
-        "tags_to_remove_with_content": [
-            TagToRemoveWithContent("div", content_max_char_length=23),
-            TagToRemoveWithContent("div", content_min_char_length=5),
-        ],
-    },
-)
-
-testdata = [
-    example_basic,
-    example_basic_with_spaces_and_line_breaks,
-    example_text_separator,
-    example_tags_to_remove_with_content,
-    example_tags_to_remove_with_content_nested,
-    example_tags_to_remove_with_content_nested_if_short,
-    example_tags_to_remove_with_content_nested_if_long,
-    example_tags_to_remove_with_content_if_long,
-    example_tags_to_remove_with_content_if_short,
-    example_tags_to_remove_with_content_if_short_and_long,
-]
+from html_parser import TagToRemoveWithContent, get_clean_text_and_metadata
 
 
-@pytest.mark.parametrize("html_orginal, target_text, args", testdata)
-def test_parse_html(html_orginal, target_text, args):
-    text, metadata = parse_html(html_text=html_orginal, **args)
-    assert text == target_text
+#%%
+def test_parse_simple_html():
+    html = """
+    <html>
+    <head>
+    </head>
+    <body>
+    <h1>This is a title</h1>
+    </body>
+    </html>
+"""
+    plain_text, metadata = get_clean_text_and_metadata(html)
+    assert plain_text == " This is a title  "  # the space are doe to the block contents
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+    assert len(metadata) == 2
+    assert "html" not in metadata_tags
+    assert "head" not in metadata_tags
+    assert "body" in metadata_tags
+    assert "h1" in metadata_tags
+
+    for metadata_node in metadata:
+        if metadata_node.value.tag == "h1":
+            metadata_h1 = metadata_node
+            break
+    assert (
+        plain_text[metadata_h1.char_start_idx : metadata_h1.char_end_idx]
+        == "This is a title"
+    )
+    return (plain_text, metadata)
+
+
+def test_parse_html_remove_tag_alone():
+    html = """
+    <html>
+    <head>
+    </head>
+    <body>
+    <h1>This is a title</h1>
+    </body>
+    </html>
+"""
+    tags_to_remove_alone = ["body"]
+    plain_text, metadata = get_clean_text_and_metadata(
+        html, tags_to_remove_alone=tags_to_remove_alone
+    )
+    assert plain_text == " This is a title  "  # the space are doe to the block contents
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+    assert len(metadata) == 1
+    assert "html" not in metadata_tags
+    assert "head" not in metadata_tags
+    assert "body" not in metadata_tags
+    assert "h1" in metadata_tags
+
+    for metadata_node in metadata:
+        if metadata_node.value.tag == "h1":
+            metadata_h1 = metadata_node
+            break
+    assert (
+        plain_text[metadata_h1.char_start_idx : metadata_h1.char_end_idx]
+        == "This is a title"
+    )
+    return (plain_text, metadata)
+
+
+def test_parse_html_remove_tag_and_content():
+    html = """
+    <html>
+    <head>
+    </head>
+    <body>
+    <h1>This is a title</h1>
+    <div>
+    <p>This is a first paragraph in div</p>
+    <p>This is a second paragraph in div</p>
+    </div>
+    <p>This is a paragraph not in div</p>
+    </body>
+    </html>
+"""
+    tags_to_remove_with_content = [TagToRemoveWithContent(tag="div")]
+    plain_text, metadata = get_clean_text_and_metadata(
+        html, tags_to_remove_with_content=tags_to_remove_with_content
+    )
+    assert (
+        plain_text == " This is a title This is a paragraph not in div  "
+    )  # the space are doe to the block contents
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+    print(metadata)
+    assert len(metadata) == 3
+    assert "html" not in metadata_tags
+    assert "head" not in metadata_tags
+    assert "body" in metadata_tags
+    assert "h1" in metadata_tags
+    assert "p" in metadata_tags
+
+    for metadata_node in metadata:
+        if metadata_node.value.tag == "h1":
+            metadata_h1 = metadata_node
+            break
+    assert (
+        plain_text[metadata_h1.char_start_idx : metadata_h1.char_end_idx]
+        == "This is a title"
+    )
+
+    for metadata_node in metadata:
+        if metadata_node.value.tag == "p":
+            metadata_p = metadata_node
+            break
+    assert (
+        plain_text[metadata_p.char_start_idx : metadata_p.char_end_idx]
+        == "This is a paragraph not in div"
+    )
+    return (plain_text, metadata)
