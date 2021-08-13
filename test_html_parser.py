@@ -120,3 +120,68 @@ def test_parse_html_remove_tag_and_content():
         == "This is a paragraph not in div"
     )
     return (plain_text, metadata)
+
+def test_parse_html_nested_example():
+    html = """
+    <html>
+    <head>
+    </head>
+    <body>
+    <h1>This is a title</h1>
+    <div>
+    <div>This is a first sub-div in div</div>
+    <div>This is a second sub-div in div</div>
+    </div>
+    <p>This is a paragraph not in div</p>
+    </body>
+    </html>
+"""
+    plain_text, metadata = get_clean_text_and_metadata(
+        html
+    )
+    assert (
+        plain_text == " This is a title  This is a first sub-div in div This is a second sub-div in div  This is a paragraph not in div  "
+    )  # the space are doe to the block contents
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+    print(metadata)
+    assert len(metadata) == 6
+    assert "html" not in metadata_tags
+    assert "head" not in metadata_tags
+    assert "body" in metadata_tags
+    assert "h1" in metadata_tags
+    assert "p" in metadata_tags
+    assert "div" in metadata_tags
+
+    for metadata_node in metadata:
+        if metadata_node.value.tag == "h1":
+            metadata_h1 = metadata_node
+            break
+    assert (
+        plain_text[metadata_h1.char_start_idx : metadata_h1.char_end_idx]
+        == "This is a title"
+    )
+
+    for metadata_node in metadata:
+        if metadata_node.value.tag == "p":
+            metadata_p = metadata_node
+            break
+    assert (
+        plain_text[metadata_p.char_start_idx : metadata_p.char_end_idx]
+        == "This is a paragraph not in div"
+    )
+    metadata_divs = []
+    div_possibilities = [
+        "This is a first sub-div in div",
+        "This is a second sub-div in div",
+        "This is a first sub-div in div This is a second sub-div in div "
+    ]
+    for metadata_node in metadata:
+        if metadata_node.value.tag == "div":
+            metadata_divs.append(metadata_node)
+    for metadata_div in metadata_divs:
+        assert (
+            plain_text[metadata_div.char_start_idx : metadata_p.char_end_idx]
+            in div_possibilities
+        )
+    return (plain_text, metadata)
