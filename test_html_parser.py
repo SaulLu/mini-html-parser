@@ -50,7 +50,7 @@ def test_parse_html_remove_tag_alone():
     plain_text, metadata = get_clean_text_and_metadata(
         html, tags_to_remove_alone=tags_to_remove_alone
     )
-    assert plain_text == " This is a title  "  # the space are doe to the block contents
+    assert plain_text == " This is a title  "  # the space are due to the block contents
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
     assert len(metadata) == 1
@@ -90,11 +90,11 @@ def test_parse_html_remove_tag_and_content():
         html, tags_to_remove_with_content=tags_to_remove_with_content
     )
     assert (
-        plain_text == " This is a title This is a paragraph not in div  "
+        plain_text == " This is a title  This is a paragraph not in div  "
     )  # the space are doe to the block contents
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
-    print(metadata)
+
     assert len(metadata) == 3
     assert "html" not in metadata_tags
     assert "head" not in metadata_tags
@@ -121,6 +121,7 @@ def test_parse_html_remove_tag_and_content():
     )
     return (plain_text, metadata)
 
+
 def test_parse_html_nested_example():
     html = """
     <html>
@@ -136,15 +137,14 @@ def test_parse_html_nested_example():
     </body>
     </html>
 """
-    plain_text, metadata = get_clean_text_and_metadata(
-        html
-    )
+    plain_text, metadata = get_clean_text_and_metadata(html)
     assert (
-        plain_text == " This is a title  This is a first sub-div in div This is a second sub-div in div  This is a paragraph not in div  "
-    )  # the space are doe to the block contents
+        plain_text
+        == " This is a title  This is a first sub-div in div This is a second sub-div in div  This is a paragraph not in div  "
+    )  # the space are due to the block contents
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
-    print(metadata)
+
     assert len(metadata) == 6
     assert "html" not in metadata_tags
     assert "head" not in metadata_tags
@@ -174,14 +174,265 @@ def test_parse_html_nested_example():
     div_possibilities = [
         "This is a first sub-div in div",
         "This is a second sub-div in div",
-        "This is a first sub-div in div This is a second sub-div in div "
+        " This is a first sub-div in div This is a second sub-div in div ",
     ]
     for metadata_node in metadata:
         if metadata_node.value.tag == "div":
             metadata_divs.append(metadata_node)
     for metadata_div in metadata_divs:
         assert (
-            plain_text[metadata_div.char_start_idx : metadata_p.char_end_idx]
+            plain_text[metadata_div.char_start_idx : metadata_div.char_end_idx]
             in div_possibilities
         )
     return (plain_text, metadata)
+
+
+def test_parse_html_nested_example_2():
+    html = """
+    <html>
+    <head>
+    </head>
+    <body>
+    <h1>This is a title</h1>
+    <div>
+    <div>This is a <div>first</div> sub-div in div</div>
+    <div>This is a <div>second</div> sub-div in div</div>
+    </div>
+    <p>This is a paragraph not in div</p>
+    </body>
+    </html>
+"""
+    plain_text, metadata = get_clean_text_and_metadata(html)
+    assert (
+        plain_text
+        == " This is a title  This is a first sub-div in div This is a second sub-div in div  This is a paragraph not in div  "
+    )  # the space are due to the block contents
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+
+    assert len(metadata) == 8
+
+    target_content_plain_text = {
+        "body": [
+            " This is a title  This is a first sub-div in div This is a second sub-div in div  This is a paragraph not in div "
+        ],
+        "h1": ["This is a title"],
+        "p": ["This is a paragraph not in div"],
+        "div": [
+            "first",
+            "second",
+            "This is a first sub-div in div",
+            "This is a second sub-div in div",
+            " This is a first sub-div in div This is a second sub-div in div ",
+        ],
+    }
+
+    target_list_tags = []
+    for target_tag in target_content_plain_text.keys():
+        target_list_tags.extend(
+            [target_tag] * len(target_content_plain_text[target_tag])
+        )
+
+    for target_tag in target_list_tags:
+        assert target_tag in metadata_tags
+        metadata_tags.remove(target_tag)
+        find = False
+        for metadata_node in metadata:
+            if (
+                metadata_node.value.tag == target_tag
+                and plain_text[
+                    metadata_node.char_start_idx : metadata_node.char_end_idx
+                ]
+                in target_content_plain_text[target_tag]
+            ):
+                find = True
+                target_content_plain_text[target_tag].remove(
+                    plain_text[
+                        metadata_node.char_start_idx : metadata_node.char_end_idx
+                    ]
+                )
+                if not target_content_plain_text[target_tag]:
+                    target_content_plain_text.pop(target_tag)
+                break
+
+        error_msg = f"Plain text not found for the tag '{target_tag}'"
+        if not find:
+            retrived_plain_text = "\n ".join(
+                [
+                    f"{metadata_node.value.tag}: {repr(plain_text[metadata_node.char_start_idx : metadata_node.char_end_idx])}"
+                    for metadata_node in metadata
+                ]
+            )
+            error_msg = f"{error_msg}\nThe plain text associated with each tags are:\n {retrived_plain_text}"
+        assert find, error_msg
+
+    assert not target_content_plain_text
+    assert not metadata_tags
+
+
+def test_parse_html_nested_example_max_length():
+    html = """
+    <html>
+    <head>
+    </head>
+    <body>
+    <h1>This is a title</h1>
+    <div>
+    <div>This is a <div>first</div> sub-div in div</div>
+    <div>This is a <div>second</div> sub-div in div</div>
+    </div>
+    <p>This is a paragraph not in div</p>
+    </body>
+    </html>
+"""
+    tags_to_remove_with_content = [
+        TagToRemoveWithContent(tag="div", content_max_char_length=6)
+    ]
+    plain_text, metadata = get_clean_text_and_metadata(
+        html, tags_to_remove_with_content=tags_to_remove_with_content
+    )
+    assert (
+        plain_text
+        == " This is a title  This is a  sub-div in div This is a  sub-div in div  This is a paragraph not in div  "
+    )  # the space are due to the block contents
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+
+    assert len(metadata) == 6
+
+    target_content_plain_text = {
+        "body": [
+            " This is a title  This is a  sub-div in div This is a  sub-div in div  This is a paragraph not in div "
+        ],
+        "h1": ["This is a title"],
+        "p": ["This is a paragraph not in div"],
+        "div": [
+            "This is a  sub-div in div",
+            "This is a  sub-div in div",
+            " This is a  sub-div in div This is a  sub-div in div ",
+        ],
+    }
+
+    target_list_tags = []
+    for target_tag in target_content_plain_text.keys():
+        target_list_tags.extend(
+            [target_tag] * len(target_content_plain_text[target_tag])
+        )
+
+    for target_tag in target_list_tags:
+        assert target_tag in metadata_tags
+        metadata_tags.remove(target_tag)
+        find = False
+        for metadata_node in metadata:
+            if (
+                metadata_node.value.tag == target_tag
+                and plain_text[
+                    metadata_node.char_start_idx : metadata_node.char_end_idx
+                ]
+                in target_content_plain_text[target_tag]
+            ):
+                find = True
+                target_content_plain_text[target_tag].remove(
+                    plain_text[
+                        metadata_node.char_start_idx : metadata_node.char_end_idx
+                    ]
+                )
+                if not target_content_plain_text[target_tag]:
+                    target_content_plain_text.pop(target_tag)
+                break
+
+        error_msg = f"Plain text not found for the tag '{target_tag}'"
+        if not find:
+            retrived_plain_text = "\n ".join(
+                [
+                    f"{metadata_node.value.tag}: {repr(plain_text[metadata_node.char_start_idx : metadata_node.char_end_idx])}"
+                    for metadata_node in metadata
+                ]
+            )
+            error_msg = f"{error_msg}\nThe plain text associated with each tags are:\n {retrived_plain_text}"
+        assert find, error_msg
+
+    assert not target_content_plain_text
+    assert not metadata_tags
+
+def test_parse_html_nested_example_min_length():
+    html = """
+    <html>
+    <head>
+    </head>
+    <body>
+    <h1>This is a title</h1>
+    <div>
+    <div>This is a <div>first</div> sub-div in div</div>
+    <div>This is a <div>second</div> sub-div in div</div>
+    </div>
+    <p>This is a paragraph not in div</p>
+    </body>
+    </html>
+"""
+    tags_to_remove_with_content = [
+        TagToRemoveWithContent(tag="div", content_min_char_length=7)
+    ]
+    plain_text, metadata = get_clean_text_and_metadata(
+        html, tags_to_remove_with_content=tags_to_remove_with_content
+    )
+    assert (
+        plain_text
+        == " This is a title     This is a paragraph not in div  "
+    )  # the space are due to the block contents
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+
+    assert len(metadata) == 4
+
+    target_content_plain_text = {
+        "body": [
+            " This is a title  This is a paragraph not in div "
+        ],
+        "h1": ["This is a title"],
+        "p": ["This is a paragraph not in div"],
+    }
+
+    target_list_tags = []
+    for target_tag in target_content_plain_text.keys():
+        target_list_tags.extend(
+            [target_tag] * len(target_content_plain_text[target_tag])
+        )
+
+    for target_tag in target_list_tags:
+        assert target_tag in metadata_tags
+        metadata_tags.remove(target_tag)
+        find = False
+        for metadata_node in metadata:
+            if (
+                metadata_node.value.tag == target_tag
+                and plain_text[
+                    metadata_node.char_start_idx : metadata_node.char_end_idx
+                ]
+                in target_content_plain_text[target_tag]
+            ):
+                find = True
+                target_content_plain_text[target_tag].remove(
+                    plain_text[
+                        metadata_node.char_start_idx : metadata_node.char_end_idx
+                    ]
+                )
+                if not target_content_plain_text[target_tag]:
+                    target_content_plain_text.pop(target_tag)
+                break
+
+        error_msg = f"Plain text not found for the tag '{target_tag}'"
+        if not find:
+            retrived_plain_text = "\n ".join(
+                [
+                    f"{metadata_node.value.tag}: {repr(plain_text[metadata_node.char_start_idx : metadata_node.char_end_idx])}"
+                    for metadata_node in metadata
+                ]
+            )
+            error_msg = f"{error_msg}\nThe plain text associated with each tags are:\n {retrived_plain_text}"
+        assert find, error_msg
+
+    assert not target_content_plain_text
+    assert not metadata_tags
+
+# %%
