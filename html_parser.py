@@ -166,11 +166,12 @@ class TagFilter:
         return False if tag not in self.tags_to_remove_alone else True
 
     def drop_tag_and_content_top_down(self, tag: str, text: str):
+        print("tag: ", tag)
         if tag not in self.tags_to_remove_with_content:
             return False
 
         tag_to_remove_characteristics = self.tags_to_remove_with_content[tag]
-        if tag_to_remove_characteristics.method != "top_down":
+        if tag_to_remove_characteristics.method != "top-down":
             return False
 
         content_char_length = len(text)
@@ -184,11 +185,12 @@ class TagFilter:
         return False
 
     def drop_tag_and_content_bottom_up(self, tag: str, text: str):
+        print("tag: ", tag)
         if tag not in self.tags_to_remove_with_content:
             return False
 
         tag_to_remove_characteristics = self.tags_to_remove_with_content[tag]
-        if tag_to_remove_characteristics.method != "bottom_up":
+        if tag_to_remove_characteristics.method != "bottom-up":
             return False
 
         content_char_length = len(text)
@@ -263,7 +265,7 @@ class TextAndMetadataCleaner:
 
     def apply(self):
         html_str = htmlmin.minify(self.html_str)
-        print("\n************\n", repr(html_str))
+        # print("\n************\n", repr(html_str))
 
         if self.start_parsing_at_tag is not None:
             root = fromstring(html_str)
@@ -278,6 +280,7 @@ class TextAndMetadataCleaner:
         #     new_etree, method="html", encoding="UTF-8", pretty_print=False
         # ).decode("UTF-8")
         # html_str = htmlmin.minify(html_str)
+        # print("\n************\n", repr(html_str))
         # new_etree = fromstring(html_str)
 
         self.metadata = []
@@ -331,17 +334,20 @@ class TextAndMetadataCleaner:
         ).decode("UTF-8")
         text = plain_text[: -len(root.tail)] if root.tail else plain_text
         if self.tag_filter.drop_tag_and_content_top_down(tag=root.tag, text=text):
+            print("remove top-down: ", root.tag)
             remove_keeping_tail(root)
+            return 
 
         for idx, child in enumerate(root):
             self._clean_etree(child)
-        
+
         # Bottom-UP deletion
         plain_text = etree.tostring(
             root, method="text", encoding="UTF-8", pretty_print=False
-        ).decode("UTF-8")        
+        ).decode("UTF-8")
         text = plain_text[: -len(root.tail)] if root.tail else plain_text
         if self.tag_filter.drop_tag_and_content_bottom_up(tag=root.tag, text=text):
+            print("remove bottom-up: ", root.tag)
             remove_keeping_tail(root)
 
 
