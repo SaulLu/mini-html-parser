@@ -4,7 +4,9 @@ import pytest
 from html_parser import TagToRemoveWithContent, get_clean_text_and_metadata
 
 
-def check_content_parsing(target_content_plain_text:str, target_metadata_tags, metadata, plain_text):
+def check_content_parsing(
+    target_content_plain_text: str, target_metadata_tags, metadata, plain_text
+):
     target_list_tags = []
     for target_tag in target_content_plain_text.keys():
         target_list_tags.extend(
@@ -46,6 +48,8 @@ def check_content_parsing(target_content_plain_text:str, target_metadata_tags, m
 
     assert not target_content_plain_text
     assert not target_metadata_tags
+
+
 #%%
 def test_parse_simple_html():
     html = """
@@ -510,9 +514,7 @@ def test_table():
         start_parsing_at_tag=None,
         attrs_to_keep=attrs_to_keep,
     )
-    assert (
-        plain_text == "  "
-    )  # the space are due to the block contents
+    assert plain_text == "  "  # the space are due to the block contents
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
 
@@ -523,8 +525,13 @@ def test_table():
         "html": ["  "],
         "caption": [" "],
     }
-    
-    check_content_parsing(target_content_plain_text=target_content_plain_text, target_metadata_tags=metadata_tags, metadata=metadata, plain_text=plain_text)
+
+    check_content_parsing(
+        target_content_plain_text=target_content_plain_text,
+        target_metadata_tags=metadata_tags,
+        metadata=metadata,
+        plain_text=plain_text,
+    )
 
 
 # %%

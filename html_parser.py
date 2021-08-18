@@ -336,7 +336,7 @@ class TextAndMetadataCleaner:
         if self.tag_filter.drop_tag_and_content_top_down(tag=root.tag, text=text):
             print("remove top-down: ", root.tag)
             remove_keeping_tail(root)
-            return 
+            return
 
         for idx, child in enumerate(root):
             self._clean_etree(child)
