@@ -90,6 +90,7 @@ class TagToRemoveWithContent:
     tag: str
     content_min_char_length: int = 0
     content_max_char_length: int = float("inf")
+    method: str = "top-down"  # or "bottom-up"
 
 
 @dataclass
@@ -112,20 +113,20 @@ class AttributeCleaner:
         self.attrs_to_keep = attrs_to_keep if isinstance(attrs_to_keep, list) else []
 
     def __call__(self, attrs: List[Tuple[str]]):
-        if isinstance(attrs, list):
-            return {attr: value for attr, value in attrs if attr in self.attrs_to_keep}
-        elif isinstance(attrs, dict):
+        if isinstance(attrs, dict):
             return {
                 attr: value
-                for attr, value in attrs
-                if attr in self.attrs_to_keep.items()
+                for (attr, value) in attrs.items()
+                if attr in self.attrs_to_keep
             }
+        elif isinstance(attrs, list):
+            return {attr: value for attr, value in attrs if attr in self.attrs_to_keep}
         elif isinstance(attrs, lxml.etree._Attrib):
             attrs = dict(attrs)
             return {
                 attr: value
-                for attr, value in attrs
-                if attr in self.attrs_to_keep.items()
+                for attr, value in attrs.items()
+                if attr in self.attrs_to_keep
             }
         else:
             raise TypeError(f"attrs need to be a list or a dict not a {type(attrs)}")
@@ -149,6 +150,14 @@ class TagFilter:
             else {}
         )
 
+        for tag_to_remove_characteristics in self.tags_to_remove_with_content.values():
+            if tag_to_remove_characteristics.method not in ["top-down", "bottom-up"]:
+                raise ValueError(
+                    f"You have requested to remove {tag_to_remove_characteristics.tag} tags and their content if the "
+                    f"content has a size between {tag_to_remove_characteristics.content_min_char_length} and "
+                    f"{tag_to_remove_characteristics.content_max_char_length} with an invalid method "
+                    f"({tag_to_remove_characteristics.method}). Valid methods are 'top_down' and 'bottom_up'."
+                )
         # todo sanitize tags_to_remove_with_content
 
     def drop_tag(self, tag: str):
@@ -156,26 +165,38 @@ class TagFilter:
             raise TypeError(f"tag need to be a string not a {type(tag)}")
         return False if tag not in self.tags_to_remove_alone else True
 
-    def drop_tag_and_content(self, tag: str, text: str):
-        print("in drop_tag_and_content", tag, text)
+    def drop_tag_and_content_top_down(self, tag: str, text: str):
         if tag not in self.tags_to_remove_with_content:
             return False
 
         tag_to_remove_characteristics = self.tags_to_remove_with_content[tag]
+        if tag_to_remove_characteristics.method != "top_down":
+            return False
+
         content_char_length = len(text)
         if (
             content_char_length <= tag_to_remove_characteristics.content_max_char_length
-            and content_char_length >= tag_to_remove_characteristics.content_min_char_length
-            ):
-            print(
-                f"\n text: {repr(text)}"
-                "\n  text lenght : ",
-                content_char_length,
-                "\n  max_char_length : ", tag_to_remove_characteristics.content_max_char_length,
-                "\n  min_char_length : ", tag_to_remove_characteristics.content_min_char_length,
-                "\n  text lenght >= max_char_length : ",content_char_length >= tag_to_remove_characteristics.content_max_char_length,
-                "\n  text lenght <= min_char_length : ", content_char_length <= tag_to_remove_characteristics.content_min_char_length,
-            )
+            and content_char_length
+            >= tag_to_remove_characteristics.content_min_char_length
+        ):
+            return True
+
+        return False
+
+    def drop_tag_and_content_bottom_up(self, tag: str, text: str):
+        if tag not in self.tags_to_remove_with_content:
+            return False
+
+        tag_to_remove_characteristics = self.tags_to_remove_with_content[tag]
+        if tag_to_remove_characteristics.method != "bottom_up":
+            return False
+
+        content_char_length = len(text)
+        if (
+            content_char_length <= tag_to_remove_characteristics.content_max_char_length
+            and content_char_length
+            >= tag_to_remove_characteristics.content_min_char_length
+        ):
             return True
 
         return False
@@ -193,19 +214,28 @@ def remove_keeping_tail(element):
 
 def _preserve_tail_before_delete(node):
     if node.tail:  # preserve the tail
-        print("tail: ", repr(node.tail))
         previous = node.getprevious()
         if previous is not None:  # if there is a previous sibling it will get the tail
-            print("previous: ", previous.tag, "| text :", previous.text, "| tail :", previous.tail,)
             if previous.tail is None:
                 previous.tail = node.tail
+            elif (
+                previous.text
+                and previous.text.endswith(PLAIN_TEXT_SEPARATOR)
+                and node.tail.startswith(PLAIN_TEXT_SEPARATOR)
+            ):
+                # Don't accumulate too much spaces
+                previous.text = previous.text[: -len(PLAIN_TEXT_SEPARATOR)] + node.tail
             else:
                 previous.tail = previous.tail + node.tail
         else:  # The parent get the tail as text
             parent = node.getparent()
-            print("parent: ", parent.tag, "| text :", parent.text, "| tail :", parent.tail,)
             if parent.text is None:
                 parent.text = node.tail
+            elif parent.text.endswith(PLAIN_TEXT_SEPARATOR) and node.tail.startswith(
+                PLAIN_TEXT_SEPARATOR
+            ):
+                # Don't accumulate too much spaces
+                parent.text = parent.text[: -len(PLAIN_TEXT_SEPARATOR)] + node.tail
             else:
                 parent.text = parent.text + node.tail
 
@@ -233,6 +263,7 @@ class TextAndMetadataCleaner:
 
     def apply(self):
         html_str = htmlmin.minify(self.html_str)
+        print("\n************\n", repr(html_str))
 
         if self.start_parsing_at_tag is not None:
             root = fromstring(html_str)
@@ -251,25 +282,30 @@ class TextAndMetadataCleaner:
 
         self.metadata = []
         self._current_char_idx = 0
+        self.text = ""
 
         plain_text = self._get_text_and_metadata(new_etree)
 
         return plain_text, self.metadata
+
+    def _add_text(self, new_text):
+        if new_text:
+            self._current_char_idx += len(new_text)
+            self.text += new_text
 
     def _get_text_and_metadata(self, root):
         metadata_node = Metadata(
             char_start_idx=self._current_char_idx,
             value=HtmlTag(tag=root.tag, attrs=self.attribute_cleaner(root.attrib)),
         )
-        self._current_char_idx += len(root.text) if root.text is not None else 0
+
+        self._add_text(root.text)
         for idx, child in enumerate(root):
             _ = self._get_text_and_metadata(child)
 
-        plain_text = etree.tostring(
-            root, method="text", encoding="UTF-8", pretty_print=False
-        ).decode("UTF-8")
-
-        print(root.tag, " ", plain_text)
+        # plain_text = etree.tostring(
+        #     root, method="text", encoding="UTF-8", pretty_print=False
+        # ).decode("UTF-8")
 
         char_end_idx = self._current_char_idx
         if metadata_node.char_start_idx == self._current_char_idx:
@@ -278,30 +314,34 @@ class TextAndMetadataCleaner:
 
         metadata_node.char_end_idx = char_end_idx
 
-        self._current_char_idx += len(root.tail) if root.tail is not None else 0
+        self._add_text(root.tail)
 
         if not self.tag_filter.drop_tag(tag=root.tag):
             self.metadata.append(metadata_node)
 
-        return plain_text
+        return self.text
 
     def _clean_etree(
         self,
         root,
     ):
-        print(f"In root {root.tag}")
-        for idx, child in enumerate(root):
-            self._clean_etree(child)
-
+        # Top-Down deletion
         plain_text = etree.tostring(
             root, method="text", encoding="UTF-8", pretty_print=False
         ).decode("UTF-8")
+        text = plain_text[: -len(root.tail)] if root.tail else plain_text
+        if self.tag_filter.drop_tag_and_content_top_down(tag=root.tag, text=text):
+            remove_keeping_tail(root)
 
-        print("plain_text: ", repr(plain_text), " | ", repr(root.tail), " | ", len(root.tail))
-        text = plain_text[:-len(root.tail)] if len(root.tail) != 0 else plain_text
-        if self.tag_filter.drop_tag_and_content(tag=root.tag, text=text):
-            print(f"**** delete {root.tag}")
-            # root.drop_tree()
+        for idx, child in enumerate(root):
+            self._clean_etree(child)
+        
+        # Bottom-UP deletion
+        plain_text = etree.tostring(
+            root, method="text", encoding="UTF-8", pretty_print=False
+        ).decode("UTF-8")        
+        text = plain_text[: -len(root.tail)] if root.tail else plain_text
+        if self.tag_filter.drop_tag_and_content_bottom_up(tag=root.tag, text=text):
             remove_keeping_tail(root)
 
 
@@ -321,80 +361,3 @@ def get_clean_text_and_metadata(
         start_parsing_at_tag=start_parsing_at_tag,
     )
     return text_and_metadata_cleaner.apply()
-    # def _get_clean_text_and_metadata(root, metadata=[], current_char_idx=0):
-    #     metadata_tmp = []
-    #     metadata_node = Metadata(
-    #         char_start_idx=current_char_idx,
-    #         value=HtmlTag(tag=root.tag, attrs=attribute_cleaner(root.attrib)),
-    #     )
-    #     current_char_idx += len(root.text) if root.text is not None else 0
-    #     for idx, child in enumerate(root):
-    #         (
-    #             plain_text,
-    #             metadata_child_node,
-    #             current_char_idx,
-    #         ) = _get_clean_text_and_metadata(child, metadata_tmp, current_char_idx)
-    #         if metadata_child_node is not None:
-    #             metadata_tmp.append(metadata_child_node)
-
-    #     plain_text = etree.tostring(
-    #         root, method="text", encoding="UTF-8", pretty_print=False
-    #     ).decode("UTF-8")
-
-    #     char_end_idx = current_char_idx
-    #     metadata_node.char_start_idx = current_char_idx
-    #     if metadata_node.char_start_idx == current_char_idx:
-    #         # it's a self closing tag
-    #         char_end_idx = None
-
-    #     metadata_node.char_end_idx = char_end_idx
-
-    #     print(
-    #         metadata_node.value.tag,
-    #         " : ",
-    #         repr(plain_text),
-    #         " : ",
-    #         repr(root.text),
-    #         " : ",
-    #         repr(root.tail),
-    #     )
-
-    #     if tag_filter.drop_tag_and_content(metadata=metadata_node):
-    #         current_char_idx = (
-    #             metadata_node.char_start_idx
-    #         )  # - len(root.text) if root.text is not None else 0
-    #         remove_keeping_tail(root)
-    #         metadata_node = None
-    #     else:
-    #         current_char_idx += len(root.tail) if root.tail is not None else 0
-    #         metadata.extend(metadata_tmp)
-
-    #     if metadata_node is not None and tag_filter.drop_tag(
-    #         tag=metadata_node.value.tag
-    #     ):
-    #         metadata_node = None
-
-    #     return plain_text, metadata_node, current_char_idx
-
-    # attribute_cleaner = AttributeCleaner(attrs_to_keep=attrs_to_keep)
-    # tag_filter = TagFilter(
-    #     tags_to_remove_alone=tags_to_remove_alone,
-    #     tags_to_remove_with_content=tags_to_remove_with_content,
-    # )
-
-    # metadata = []
-    # html_str = htmlmin.minify(html_str)
-
-    # if start_parsing_at_tag is not None:
-    #     root = etree.HTML(html_str)
-    #     find = etree.XPath(f"//{start_parsing_at_tag}")
-    #     new_etree = find(root)[0]
-    # else:
-    #     new_etree = etree.HTML(html_str)
-
-    # plain_text, metadata_node, _ = _get_clean_text_and_metadata(
-    #     new_etree, metadata=metadata
-    # )
-    # if metadata_node is not None:
-    #     metadata.extend([metadata_node])
-    # return plain_text, metadata
