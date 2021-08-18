@@ -273,47 +273,12 @@ def test_parse_html_nested_example_2():
         ],
     }
 
-    target_list_tags = []
-    for target_tag in target_content_plain_text.keys():
-        target_list_tags.extend(
-            [target_tag] * len(target_content_plain_text[target_tag])
-        )
-
-    for target_tag in target_list_tags:
-        assert target_tag in metadata_tags
-        metadata_tags.remove(target_tag)
-        find = False
-        for metadata_node in metadata:
-            if (
-                metadata_node.value.tag == target_tag
-                and plain_text[
-                    metadata_node.char_start_idx : metadata_node.char_end_idx
-                ]
-                in target_content_plain_text[target_tag]
-            ):
-                find = True
-                target_content_plain_text[target_tag].remove(
-                    plain_text[
-                        metadata_node.char_start_idx : metadata_node.char_end_idx
-                    ]
-                )
-                if not target_content_plain_text[target_tag]:
-                    target_content_plain_text.pop(target_tag)
-                break
-
-        error_msg = f"Plain text not found for the tag '{target_tag}'"
-        if not find:
-            retrived_plain_text = "\n ".join(
-                [
-                    f"{metadata_node.value.tag}: {repr(plain_text[metadata_node.char_start_idx : metadata_node.char_end_idx])}"
-                    for metadata_node in metadata
-                ]
-            )
-            error_msg = f"{error_msg}\nThe plain text associated with each tags are:\n {retrived_plain_text}"
-        assert find, error_msg
-
-    assert not target_content_plain_text
-    assert not metadata_tags
+    check_content_parsing(
+        target_content_plain_text=target_content_plain_text,
+        target_metadata_tags=metadata_tags,
+        metadata=metadata,
+        plain_text=plain_text,
+    )
 
 
 def test_parse_html_nested_example_max_length():
@@ -359,47 +324,12 @@ def test_parse_html_nested_example_max_length():
         ],
     }
 
-    target_list_tags = []
-    for target_tag in target_content_plain_text.keys():
-        target_list_tags.extend(
-            [target_tag] * len(target_content_plain_text[target_tag])
-        )
-
-    for target_tag in target_list_tags:
-        assert target_tag in metadata_tags
-        metadata_tags.remove(target_tag)
-        find = False
-        for metadata_node in metadata:
-            if (
-                metadata_node.value.tag == target_tag
-                and plain_text[
-                    metadata_node.char_start_idx : metadata_node.char_end_idx
-                ]
-                in target_content_plain_text[target_tag]
-            ):
-                find = True
-                target_content_plain_text[target_tag].remove(
-                    plain_text[
-                        metadata_node.char_start_idx : metadata_node.char_end_idx
-                    ]
-                )
-                if not target_content_plain_text[target_tag]:
-                    target_content_plain_text.pop(target_tag)
-                break
-
-        error_msg = f"Plain text not found for the tag '{target_tag}'"
-        if not find:
-            retrived_plain_text = "\n ".join(
-                [
-                    f"{metadata_node.value.tag}: {repr(plain_text[metadata_node.char_start_idx : metadata_node.char_end_idx])}"
-                    for metadata_node in metadata
-                ]
-            )
-            error_msg = f"{error_msg}\nThe plain text associated with each tags are:\n {retrived_plain_text}"
-        assert find, error_msg
-
-    assert not target_content_plain_text
-    assert not metadata_tags
+    check_content_parsing(
+        target_content_plain_text=target_content_plain_text,
+        target_metadata_tags=metadata_tags,
+        metadata=metadata,
+        plain_text=plain_text,
+    )
 
 
 def test_parse_html_nested_example_min_length():
@@ -437,47 +367,12 @@ def test_parse_html_nested_example_min_length():
         "p": ["This is a paragraph not in div"],
     }
 
-    target_list_tags = []
-    for target_tag in target_content_plain_text.keys():
-        target_list_tags.extend(
-            [target_tag] * len(target_content_plain_text[target_tag])
-        )
-
-    for target_tag in target_list_tags:
-        assert target_tag in metadata_tags
-        metadata_tags.remove(target_tag)
-        find = False
-        for metadata_node in metadata:
-            if (
-                metadata_node.value.tag == target_tag
-                and plain_text[
-                    metadata_node.char_start_idx : metadata_node.char_end_idx
-                ]
-                in target_content_plain_text[target_tag]
-            ):
-                find = True
-                target_content_plain_text[target_tag].remove(
-                    plain_text[
-                        metadata_node.char_start_idx : metadata_node.char_end_idx
-                    ]
-                )
-                if not target_content_plain_text[target_tag]:
-                    target_content_plain_text.pop(target_tag)
-                break
-
-        error_msg = f"Plain text not found for the tag '{target_tag}'"
-        if not find:
-            retrived_plain_text = "\n ".join(
-                [
-                    f"{metadata_node.value.tag}: {repr(plain_text[metadata_node.char_start_idx : metadata_node.char_end_idx])}"
-                    for metadata_node in metadata
-                ]
-            )
-            error_msg = f"{error_msg}\nThe plain text associated with each tags are:\n {retrived_plain_text} \nand the text to match with:\n{repr(plain_text[metadata_node.char_start_idx : metadata_node.char_end_idx])}"
-        assert find, error_msg
-
-    assert not target_content_plain_text
-    assert not metadata_tags
+    check_content_parsing(
+        target_content_plain_text=target_content_plain_text,
+        target_metadata_tags=metadata_tags,
+        metadata=metadata,
+        plain_text=plain_text,
+    )
 
 
 def test_table():
