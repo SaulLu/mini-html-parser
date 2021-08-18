@@ -4,6 +4,48 @@ import pytest
 from html_parser import TagToRemoveWithContent, get_clean_text_and_metadata
 
 
+def check_content_parsing(target_content_plain_text:str, target_metadata_tags, metadata, plain_text):
+    target_list_tags = []
+    for target_tag in target_content_plain_text.keys():
+        target_list_tags.extend(
+            [target_tag] * len(target_content_plain_text[target_tag])
+        )
+
+    for target_tag in target_list_tags:
+        assert target_tag in target_metadata_tags
+        target_metadata_tags.remove(target_tag)
+        find = False
+        for metadata_node in metadata:
+            if (
+                metadata_node.value.tag == target_tag
+                and plain_text[
+                    metadata_node.char_start_idx : metadata_node.char_end_idx
+                ]
+                in target_content_plain_text[target_tag]
+            ):
+                find = True
+                target_content_plain_text[target_tag].remove(
+                    plain_text[
+                        metadata_node.char_start_idx : metadata_node.char_end_idx
+                    ]
+                )
+                if not target_content_plain_text[target_tag]:
+                    target_content_plain_text.pop(target_tag)
+                break
+
+        error_msg = f"Plain text not found for the tag '{target_tag}'"
+        if not find:
+            retrived_plain_text = "\n ".join(
+                [
+                    f"{metadata_node.value.tag}: {repr(plain_text[metadata_node.char_start_idx : metadata_node.char_end_idx])}"
+                    for metadata_node in metadata
+                ]
+            )
+            error_msg = f"{error_msg}\nThe plain text associated with each tags are:\n {retrived_plain_text} \nand the text to match with:\n{repr(plain_text[metadata_node.char_start_idx : metadata_node.char_end_idx])}"
+        assert find, error_msg
+
+    assert not target_content_plain_text
+    assert not target_metadata_tags
 #%%
 def test_parse_simple_html():
     html = """
@@ -293,7 +335,7 @@ def test_parse_html_nested_example_max_length():
     )
     assert (
         plain_text
-        == " This is a title  This is a  sub-div in div This is a  sub-div in div  This is a paragraph not in div  "
+        == " This is a title  This is a sub-div in div This is a sub-div in div  This is a paragraph not in div  "
     )  # the space are due to the block contents
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
@@ -302,14 +344,14 @@ def test_parse_html_nested_example_max_length():
 
     target_content_plain_text = {
         "body": [
-            " This is a title  This is a  sub-div in div This is a  sub-div in div  This is a paragraph not in div "
+            " This is a title  This is a sub-div in div This is a sub-div in div  This is a paragraph not in div "
         ],
         "h1": ["This is a title"],
         "p": ["This is a paragraph not in div"],
         "div": [
-            "This is a  sub-div in div",
-            "This is a  sub-div in div",
-            " This is a  sub-div in div This is a  sub-div in div ",
+            "This is a sub-div in div",
+            "This is a sub-div in div",
+            " This is a sub-div in div This is a sub-div in div ",
         ],
     }
 
@@ -354,6 +396,7 @@ def test_parse_html_nested_example_max_length():
 
     assert not target_content_plain_text
     assert not metadata_tags
+
 
 def test_parse_html_nested_example_min_length():
     html = """
@@ -377,18 +420,15 @@ def test_parse_html_nested_example_min_length():
         html, tags_to_remove_with_content=tags_to_remove_with_content
     )
     assert (
-        plain_text
-        == " This is a title     This is a paragraph not in div  "
+        plain_text == " This is a title  This is a paragraph not in div  "
     )  # the space are due to the block contents
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
 
-    assert len(metadata) == 4
+    assert len(metadata) == 3
 
     target_content_plain_text = {
-        "body": [
-            " This is a title  This is a paragraph not in div "
-        ],
+        "body": [" This is a title  This is a paragraph not in div "],
         "h1": ["This is a title"],
         "p": ["This is a paragraph not in div"],
     }
@@ -429,10 +469,62 @@ def test_parse_html_nested_example_min_length():
                     for metadata_node in metadata
                 ]
             )
-            error_msg = f"{error_msg}\nThe plain text associated with each tags are:\n {retrived_plain_text}"
+            error_msg = f"{error_msg}\nThe plain text associated with each tags are:\n {retrived_plain_text} \nand the text to match with:\n{repr(plain_text[metadata_node.char_start_idx : metadata_node.char_end_idx])}"
         assert find, error_msg
 
     assert not target_content_plain_text
     assert not metadata_tags
+
+
+def test_table():
+    html = """<html><caption>
+</caption>
+<tbody><tr>
+<th>&nbsp;</th>
+<th colspan="4"><b><a href="/wiki/Jeux_olympiques_d%27%C3%A9t%C3%A9" title="">Jeux olympiques d'été</a></b>
+</th>
+<th>&nbsp;</th>
+<th colspan="3"><b><a href="/wiki/Jeux_olympiques_d%27hiver" title="Jeux olympiques d'hiver">Jeux olympiques d'hiver</a></b>
+</th></tr>
+<tr>
+<td>2032</td>
+<td><a href="/wiki/Jeux_olympiques_d%27%C3%A9t%C3%A9_de_2032" title="Jeux olympiques d'été de 2032">XXXV</a></td>
+<td><a href="/wiki/Brisbane" title="Brisbane">Brisbane</a> (1)</td>
+<td><span class="datasortkey" data-sort-value="Australie"><span class="flagicon"><a href="//commons.wikimedia.org/wiki/File:Flag_of_Australia.svg?uselang=fr" class="image" title="Drapeau de l'Australie"><img alt="Drapeau de l'Australie" src="//upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Flag_of_Australia.svg/20px-Flag_of_Australia.svg.png" decoding="async" class="noviewer thumbborder" srcset="//upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Flag_of_Australia.svg/30px-Flag_of_Australia.svg.png 1.5x, //upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Flag_of_Australia.svg/40px-Flag_of_Australia.svg.png 2x" data-file-width="1280" data-file-height="640" width="20" height="10"></a> </span><a href="/wiki/Australie" title="Australie">Australie</a></span> (3)</td>
+<td><a href="/wiki/Oc%C3%A9anie" title="Océanie">Océanie</a> (3)</td>
+<td></td>
+<td></td>
+<td></td>
+<td>
+</td></tr></tbody></html>"""
+    tags_to_remove_with_content = [
+        # TagToRemoveWithContent(tag="td", content_max_char_length=6),
+        # TagToRemoveWithContent(tag="tr", content_max_char_length=6),
+        TagToRemoveWithContent(tag="tbody"),
+        TagToRemoveWithContent(tag="td"),
+    ]
+    attrs_to_keep = ["class", "id"]
+    plain_text, metadata = get_clean_text_and_metadata(
+        html,
+        tags_to_remove_with_content=tags_to_remove_with_content,
+        start_parsing_at_tag=None,
+        attrs_to_keep=attrs_to_keep,
+    )
+    assert (
+        plain_text == "  "
+    )  # the space are due to the block contents
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+
+    assert len(metadata) == 3  # div with only spaces inside
+
+    target_content_plain_text = {
+        "body": ["  "],
+        "html": ["  "],
+        "caption": [" "],
+    }
+    
+    check_content_parsing(target_content_plain_text=target_content_plain_text, target_metadata_tags=metadata_tags, metadata=metadata, plain_text=plain_text)
+
 
 # %%
