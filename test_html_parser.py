@@ -96,7 +96,7 @@ def test_parse_html_remove_tag_alone():
     plain_text, metadata = get_clean_text_and_metadata(
         html, tags_to_remove_alone=tags_to_remove_alone
     )
-    assert plain_text == " This is a title  "  # the space are due to the block contents
+    assert plain_text == " This is a title  "
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
     assert len(metadata) == 1
@@ -136,7 +136,7 @@ def test_parse_html_remove_tag_and_content():
         html, tags_to_remove_with_content=tags_to_remove_with_content
     )
     assert (
-        plain_text == " This is a title  This is a paragraph not in div  "
+        plain_text == " This is a title This is a paragraph not in div  "
     )  # the space are doe to the block contents
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
@@ -187,7 +187,7 @@ def test_parse_html_nested_example():
     assert (
         plain_text
         == " This is a title  This is a first sub-div in div This is a second sub-div in div  This is a paragraph not in div  "
-    )  # the space are due to the block contents
+    )
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
 
@@ -252,7 +252,7 @@ def test_parse_html_nested_example_2():
     assert (
         plain_text
         == " This is a title  This is a first sub-div in div This is a second sub-div in div  This is a paragraph not in div  "
-    )  # the space are due to the block contents
+    )
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
 
@@ -305,7 +305,7 @@ def test_parse_html_nested_example_max_length():
     assert (
         plain_text
         == " This is a title  This is a sub-div in div This is a sub-div in div  This is a paragraph not in div  "
-    )  # the space are due to the block contents
+    )
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
 
@@ -348,21 +348,19 @@ def test_parse_html_nested_example_min_length():
     </html>
 """
     tags_to_remove_with_content = [
-        TagToRemoveWithContent(tag="div", content_min_char_length=7)
+        TagToRemoveWithContent(tag="div", content_min_char_length=7, method="top-down")
     ]
     plain_text, metadata = get_clean_text_and_metadata(
         html, tags_to_remove_with_content=tags_to_remove_with_content
     )
-    assert (
-        plain_text == " This is a title  This is a paragraph not in div  "
-    )  # the space are due to the block contents
+    assert plain_text == " This is a title This is a paragraph not in div  "
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
 
     assert len(metadata) == 3
 
     target_content_plain_text = {
-        "body": [" This is a title  This is a paragraph not in div "],
+        "body": [" This is a title This is a paragraph not in div "],
         "h1": ["This is a title"],
         "p": ["This is a paragraph not in div"],
     }
@@ -375,7 +373,7 @@ def test_parse_html_nested_example_min_length():
     )
 
 
-def test_table():
+def test_remove_all_table():
     html = """<html><caption>
 </caption>
 <tbody><tr>
@@ -406,18 +404,16 @@ def test_table():
     plain_text, metadata = get_clean_text_and_metadata(
         html,
         tags_to_remove_with_content=tags_to_remove_with_content,
-        start_parsing_at_tag=None,
         attrs_to_keep=attrs_to_keep,
     )
-    assert plain_text == "  "  # the space are due to the block contents
+    assert plain_text == "  "
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
 
-    assert len(metadata) == 3  # div with only spaces inside
+    assert len(metadata) == 2
 
     target_content_plain_text = {
         "body": ["  "],
-        "html": ["  "],
         "caption": [" "],
     }
 
@@ -429,4 +425,135 @@ def test_table():
     )
 
 
-# %%
+def test_table():
+    html = """<html><table>
+    <thead>
+        <tr>
+            <th colspan="2">The table header</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>The table body</td>
+            <td>with two columns</td>
+        </tr>
+    </tbody>
+</table></html>"""
+    tags_to_remove_with_content = [
+        TagToRemoveWithContent(tag="table", content_min_char_length=54),
+    ]
+    attrs_to_keep = ["class", "id"]
+    plain_text, metadata = get_clean_text_and_metadata(
+        html,
+        tags_to_remove_with_content=tags_to_remove_with_content,
+        attrs_to_keep=attrs_to_keep,
+    )
+    assert plain_text == ""
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+
+    assert len(metadata) == 1
+
+    target_content_plain_text = {
+        "body": [""],
+    }
+
+    check_content_parsing(
+        target_content_plain_text=target_content_plain_text,
+        target_metadata_tags=metadata_tags,
+        metadata=metadata,
+        plain_text=plain_text,
+    )
+
+
+def test_keep_everything():
+    html = """<html><body><table>
+    <thead>
+        <tr>
+            <th colspan="2">The table header</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>The table body</td>
+            <td>with two columns</td>
+        </tr>
+    </tbody>
+</table></body></html>"""
+    plain_text, metadata = get_clean_text_and_metadata(
+        html,
+        # start_parsing_at_tag=None,
+    )
+    assert plain_text == "   The table header     The table body with two columns   "
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+
+    assert len(metadata) == 9
+
+    target_content_plain_text = {
+        "table": ["   The table header     The table body with two columns   "],
+        "thead": ["  The table header  "],
+        "tr": [" The table header ", " The table body with two columns "],
+        "th": ["The table header"],
+        "tbody": ["  The table body with two columns  "],
+        "td": ["The table body","with two columns"],
+        "body": ["   The table header     The table body with two columns   "]
+    }
+
+    check_content_parsing(
+        target_content_plain_text=target_content_plain_text,
+        target_metadata_tags=metadata_tags,
+        metadata=metadata,
+        plain_text=plain_text,
+    )
+
+
+def test_behavior_on_corrupt_examples():
+    # Corrupt 1: missing end tag value
+    html = """<p> test </>"""
+    plain_text, metadata = get_clean_text_and_metadata(
+        html,
+        # start_parsing_at_tag=None,
+    )
+    assert plain_text == " test >"
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+
+    assert len(metadata) == 2
+
+    target_content_plain_text = {
+        "p": [" test >"],
+        "body": [" test >"],
+    }
+
+    check_content_parsing(
+        target_content_plain_text=target_content_plain_text,
+        target_metadata_tags=metadata_tags,
+        metadata=metadata,
+        plain_text=plain_text,
+    )
+    assert metadata[0].value.attrs == {}
+
+    # Corrupt 2: unnecessary "
+    html = """<a href="http://example.com""> test </a>"""
+    plain_text, metadata = get_clean_text_and_metadata(
+        html,
+        # start_parsing_at_tag=None,
+    )
+    assert plain_text == " test "
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+
+    assert len(metadata) == 2
+
+    target_content_plain_text = {
+        "a": [" test "],
+        "body": [" test "],
+    }
+    check_content_parsing(
+        target_content_plain_text=target_content_plain_text,
+        target_metadata_tags=metadata_tags,
+        metadata=metadata,
+        plain_text=plain_text,
+    )
+    assert metadata[0].value.attrs == {"href": "http://example.com"}
