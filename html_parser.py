@@ -3,13 +3,13 @@ import re
 from dataclasses import dataclass
 from html.entities import name2codepoint
 from html.parser import HTMLParser
-from lxml.html import fromstring
 from typing import List, Optional, Tuple
 
 import htmlmin
 import lxml
 from bs4 import BeautifulSoup
 from lxml import etree
+from lxml.html import fromstring
 
 BLOCK_ELEMENTS = [
     "address",
@@ -104,32 +104,42 @@ class Metadata:
     char_start_idx: int
     value: HtmlTag
     char_end_idx: Optional[int] = None
+    self_closing: Optional[bool] = False
     key: str = "html"
     type: str = "local"
 
 
 class AttributeCleaner:
     def __init__(self, attrs_to_keep: Optional[List[str]]):
-        self.attrs_to_keep = attrs_to_keep if isinstance(attrs_to_keep, list) else []
+        self.attrs_to_keep = attrs_to_keep
 
     def __call__(self, attrs: List[Tuple[str]]):
         if isinstance(attrs, dict):
             return {
                 attr: value
                 for (attr, value) in attrs.items()
-                if attr in self.attrs_to_keep
+                if self.attrs_to_keep is None or attr in self.attrs_to_keep
             }
         elif isinstance(attrs, list):
-            return {attr: value for attr, value in attrs if attr in self.attrs_to_keep}
+            return {
+                attr: value
+                for attr, value in attrs
+                if self.attrs_to_keep is None or attr in self.attrs_to_keep
+            }
         elif isinstance(attrs, lxml.etree._Attrib):
             attrs = dict(attrs)
             return {
                 attr: value
                 for attr, value in attrs.items()
-                if attr in self.attrs_to_keep
+                if self.attrs_to_keep is None or attr in self.attrs_to_keep
             }
         else:
-            raise TypeError(f"attrs need to be a list or a dict not a {type(attrs)}")
+            attrs = dict(attrs)
+            return {
+                attr: value
+                for attr, value in attrs.items()
+                if self.attrs_to_keep is None or attr in self.attrs_to_keep
+            }
 
 
 class TagFilter:
@@ -162,11 +172,12 @@ class TagFilter:
 
     def drop_tag(self, tag: str):
         if not isinstance(tag, str):
-            raise TypeError(f"tag need to be a string not a {type(tag)}")
+            tag = str(tag)
+            # raise TypeError(f"tag need to be a string not a {type(tag)}")
         return False if tag not in self.tags_to_remove_alone else True
 
     def drop_tag_and_content_top_down(self, tag: str, text: str):
-        print("tag: ", tag)
+        # print("tag: ", tag)
         if tag not in self.tags_to_remove_with_content:
             return False
 
@@ -185,7 +196,7 @@ class TagFilter:
         return False
 
     def drop_tag_and_content_bottom_up(self, tag: str, text: str):
-        print("tag: ", tag)
+        # print("tag: ", tag)
         if tag not in self.tags_to_remove_with_content:
             return False
 
@@ -264,25 +275,33 @@ class TextAndMetadataCleaner:
         )
 
     def apply(self):
-        html_str = htmlmin.minify(self.html_str)
-        # print("\n************\n", repr(html_str))
+        html_str = self.html_str
 
+        # Traitement n°1: start the parsing at a special tags (mostly tested with <body>)
         if self.start_parsing_at_tag is not None:
             root = fromstring(html_str)
             find = etree.XPath(f"//{self.start_parsing_at_tag}")
             new_etree = find(root)[0]
-        else:
+            html_str = etree.tostring(
+                new_etree, method="html", encoding="UTF-8", pretty_print=False
+            ).decode("UTF-8")
+
+        # Traitement n°2: we removes sub-trees from the HTML + we minify the html
+        html_str = htmlmin.minify(html_str, remove_comments=True, keep_pre=True)
+        previous_html_str = ""
+        # We make a while loop because the minification rules are not simple and removing subtrees affects the minification
+        while previous_html_str != html_str:
+            previous_html_str = html_str
             new_etree = fromstring(html_str)
 
-        self._clean_etree(new_etree)
+            self._clean_etree(new_etree)
 
-        # html_str = etree.tostring(
-        #     new_etree, method="html", encoding="UTF-8", pretty_print=False
-        # ).decode("UTF-8")
-        # html_str = htmlmin.minify(html_str)
-        # print("\n************\n", repr(html_str))
-        # new_etree = fromstring(html_str)
+            html_str = etree.tostring(
+                new_etree, method="html", encoding="UTF-8", pretty_print=False
+            ).decode("UTF-8")
+            html_str = htmlmin.minify(html_str)
 
+        # Traitement n°3: we separate the text from the list of metadata json that we keep
         self.metadata = []
         self._current_char_idx = 0
         self.text = ""
@@ -306,14 +325,17 @@ class TextAndMetadataCleaner:
         for idx, child in enumerate(root):
             _ = self._get_text_and_metadata(child)
 
-        # plain_text = etree.tostring(
-        #     root, method="text", encoding="UTF-8", pretty_print=False
-        # ).decode("UTF-8")
-
         char_end_idx = self._current_char_idx
         if metadata_node.char_start_idx == self._current_char_idx:
-            # it's a self closing tag
+            # There is not content between the tags
             char_end_idx = None
+
+            # Check if it's a self-closing tag
+            tag_rendering = etree.tostring(
+                root, method="html", encoding="UTF-8", pretty_print=False
+            ).decode("UTF-8")
+            if len(tag_rendering.split(root.tag)) == 2:
+                metadata_node.self_closing = True
 
         metadata_node.char_end_idx = char_end_idx
 
@@ -334,7 +356,6 @@ class TextAndMetadataCleaner:
         ).decode("UTF-8")
         text = plain_text[: -len(root.tail)] if root.tail else plain_text
         if self.tag_filter.drop_tag_and_content_top_down(tag=root.tag, text=text):
-            print("remove top-down: ", root.tag)
             remove_keeping_tail(root)
             return
 
@@ -347,7 +368,6 @@ class TextAndMetadataCleaner:
         ).decode("UTF-8")
         text = plain_text[: -len(root.tail)] if root.tail else plain_text
         if self.tag_filter.drop_tag_and_content_bottom_up(tag=root.tag, text=text):
-            print("remove bottom-up: ", root.tag)
             remove_keeping_tail(root)
 
 
@@ -356,7 +376,6 @@ def get_clean_text_and_metadata(
     tags_to_remove_with_content: Optional[List[TagToRemoveWithContent]] = None,
     tags_to_remove_alone: Optional[List[str]] = None,
     attrs_to_keep: Optional[List[str]] = None,
-    # remove_space_between_html_tags: Optional[bool] = True,
     start_parsing_at_tag: Optional[str] = "body",
 ):
     text_and_metadata_cleaner = TextAndMetadataCleaner(
