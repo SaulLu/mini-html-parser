@@ -177,7 +177,6 @@ class TagFilter:
         return False if tag not in self.tags_to_remove_alone else True
 
     def drop_tag_and_content_top_down(self, tag: str, text: str):
-        # print("tag: ", tag)
         if tag not in self.tags_to_remove_with_content:
             return False
 
@@ -196,7 +195,6 @@ class TagFilter:
         return False
 
     def drop_tag_and_content_bottom_up(self, tag: str, text: str):
-        # print("tag: ", tag)
         if tag not in self.tags_to_remove_with_content:
             return False
 
@@ -261,6 +259,7 @@ class TextAndMetadataCleaner:
         tags_to_remove_alone: Optional[List[str]] = None,
         attrs_to_keep: Optional[List[str]] = None,
         start_parsing_at_tag: Optional[str] = "body",
+        fold_consecutive_tags: Optional[List[str]] = None,
     ):
         self.html_str = html_str
         self.tags_to_remove_with_content = tags_to_remove_with_content
@@ -276,7 +275,6 @@ class TextAndMetadataCleaner:
 
     def apply(self):
         html_str = self.html_str
-
         # Traitement n°1: start the parsing at a special tags (mostly tested with <body>)
         if self.start_parsing_at_tag is not None:
             root = fromstring(html_str)
@@ -285,15 +283,23 @@ class TextAndMetadataCleaner:
             html_str = etree.tostring(
                 new_etree, method="html", encoding="UTF-8", pretty_print=False
             ).decode("UTF-8")
+            if not html_str.startswith("<html>"):
+                self.tag_filter.tags_to_remove_alone = (
+                    self.tag_filter.tags_to_remove_alone + ["html"]
+                    if self.tag_filter.tags_to_remove_alone
+                    else ["html"]
+                )
+                # need to re-add html tag otherwise the fromstring` do something strange
+                html_str = f"<html>{html_str}</html>"
 
-        # Traitement n°2: we removes sub-trees from the HTML + we minify the html
+        # Traitement n°2: [all treatments impacting the chr_idx] we removes sub-trees from the HTML + we minify the html
         html_str = htmlmin.minify(html_str, remove_comments=True, keep_pre=True)
         previous_html_str = ""
         # We make a while loop because the minification rules are not simple and removing subtrees affects the minification
         while previous_html_str != html_str:
             previous_html_str = html_str
             new_etree = fromstring(html_str)
-
+            
             self._clean_etree(new_etree)
 
             html_str = etree.tostring(
@@ -376,13 +382,14 @@ def get_clean_text_and_metadata(
     tags_to_remove_with_content: Optional[List[TagToRemoveWithContent]] = None,
     tags_to_remove_alone: Optional[List[str]] = None,
     attrs_to_keep: Optional[List[str]] = None,
-    start_parsing_at_tag: Optional[str] = "body",
+    fold_consecutive_tags: Optional[List[str]] = None,
 ):
     text_and_metadata_cleaner = TextAndMetadataCleaner(
         html_str=html_str,
         tags_to_remove_with_content=tags_to_remove_with_content,
         tags_to_remove_alone=tags_to_remove_alone,
         attrs_to_keep=attrs_to_keep,
-        start_parsing_at_tag=start_parsing_at_tag,
+        start_parsing_at_tag="body",
+        fold_consecutive_tags=fold_consecutive_tags,
     )
     return text_and_metadata_cleaner.apply()
