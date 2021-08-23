@@ -234,8 +234,6 @@ class ConsecutiveTagCleaner:
 
     def __call__(self, root):
         tag = root.tag
-        if len(root) == 1:
-            print("\n", tag, root[0].tag, root.attrib)
         if (
             (tag in self.tags_to_fold and len(root) == 1 and root[0].tag == tag) or 
             (tag in [FAKE_TAG_BLOCK, FAKE_TAG_INLINE, FAKE_TAG_BASIC] and len(root) == 1 and 'previous_tag' in root.attrib and root[0].tag == root.attrib["previous_tag"])
@@ -387,9 +385,6 @@ class TextAndMetadataCleaner:
         return plain_text, self.metadata
 
     def _add_text(self, tag, new_text):
-        print(
-            f"add text {new_text} with tag {tag} in BLOCK_ELEMENTS {tag in BLOCK_ELEMENTS} or in INLINE_ELEMENTS_SPACING {tag in INLINE_ELEMENTS_SPACING}"
-        )
         if tag in BLOCK_ELEMENTS:
             self.text = self._append_block_separator(self.text)
         elif tag in INLINE_ELEMENTS_SPACING:
