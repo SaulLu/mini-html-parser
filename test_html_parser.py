@@ -62,7 +62,7 @@ def test_parse_simple_html():
     </html>
 """
     plain_text, metadata = get_clean_text_and_metadata(html)
-    assert plain_text == " This is a title  "  # the space are doe to the block contents
+    assert plain_text == "This is a title\n"  # the space are doe to the block contents
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
     assert len(metadata) == 2
@@ -96,7 +96,7 @@ def test_parse_html_remove_tag_alone():
     plain_text, metadata = get_clean_text_and_metadata(
         html, tags_to_remove_alone=tags_to_remove_alone
     )
-    assert plain_text == " This is a title  "
+    assert plain_text == "This is a title\n"
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
     assert len(metadata) == 1
@@ -135,8 +135,10 @@ def test_parse_html_remove_tag_and_content():
     plain_text, metadata = get_clean_text_and_metadata(
         html, tags_to_remove_with_content=tags_to_remove_with_content
     )
-    assert (
-        plain_text == " This is a title This is a paragraph not in div  "
+    assert plain_text == (
+        """This is a title
+This is a paragraph not in div
+"""
     )  # the space are doe to the block contents
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
@@ -184,53 +186,41 @@ def test_parse_html_nested_example():
     </html>
 """
     plain_text, metadata = get_clean_text_and_metadata(html)
-    assert (
-        plain_text
-        == " This is a title  This is a first sub-div in div This is a second sub-div in div  This is a paragraph not in div  "
+    assert plain_text == (
+        """This is a title
+This is a first sub-div in div
+This is a second sub-div in div
+This is a paragraph not in div
+"""
     )
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
 
     assert len(metadata) == 6
-    assert "html" not in metadata_tags
-    assert "head" not in metadata_tags
-    assert "body" in metadata_tags
-    assert "h1" in metadata_tags
-    assert "p" in metadata_tags
-    assert "div" in metadata_tags
 
-    for metadata_node in metadata:
-        if metadata_node.value.tag == "h1":
-            metadata_h1 = metadata_node
-            break
-    assert (
-        plain_text[metadata_h1.char_start_idx : metadata_h1.char_end_idx]
-        == "This is a title"
-    )
+    target_content_plain_text = {
+        "body": [
+            """This is a title
+This is a first sub-div in div
+This is a second sub-div in div
+This is a paragraph not in div
+"""
+        ],
+        "h1": ["This is a title"],
+        "p": ["This is a paragraph not in div"],
+        "div": [
+            "This is a first sub-div in div",
+            "This is a second sub-div in div",
+            "This is a first sub-div in div\nThis is a second sub-div in div\n",
+        ],
+    }
 
-    for metadata_node in metadata:
-        if metadata_node.value.tag == "p":
-            metadata_p = metadata_node
-            break
-    assert (
-        plain_text[metadata_p.char_start_idx : metadata_p.char_end_idx]
-        == "This is a paragraph not in div"
+    check_content_parsing(
+        target_content_plain_text=target_content_plain_text,
+        target_metadata_tags=metadata_tags,
+        metadata=metadata,
+        plain_text=plain_text,
     )
-    metadata_divs = []
-    div_possibilities = [
-        "This is a first sub-div in div",
-        "This is a second sub-div in div",
-        " This is a first sub-div in div This is a second sub-div in div ",
-    ]
-    for metadata_node in metadata:
-        if metadata_node.value.tag == "div":
-            metadata_divs.append(metadata_node)
-    for metadata_div in metadata_divs:
-        assert (
-            plain_text[metadata_div.char_start_idx : metadata_div.char_end_idx]
-            in div_possibilities
-        )
-    return (plain_text, metadata)
 
 
 def test_parse_html_nested_example_2():
@@ -251,7 +241,15 @@ def test_parse_html_nested_example_2():
     plain_text, metadata = get_clean_text_and_metadata(html)
     assert (
         plain_text
-        == " This is a title  This is a first sub-div in div This is a second sub-div in div  This is a paragraph not in div  "
+        == """This is a title
+This is a
+first
+sub-div in div
+This is a
+second
+sub-div in div
+This is a paragraph not in div
+"""
     )
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
@@ -260,16 +258,24 @@ def test_parse_html_nested_example_2():
 
     target_content_plain_text = {
         "body": [
-            " This is a title  This is a first sub-div in div This is a second sub-div in div  This is a paragraph not in div "
+            """This is a title
+This is a
+first
+sub-div in div
+This is a
+second
+sub-div in div
+This is a paragraph not in div
+"""
         ],
         "h1": ["This is a title"],
         "p": ["This is a paragraph not in div"],
         "div": [
             "first",
             "second",
-            "This is a first sub-div in div",
-            "This is a second sub-div in div",
-            " This is a first sub-div in div This is a second sub-div in div ",
+            "This is a\nfirst\nsub-div in div",
+            "This is a\nsecond\nsub-div in div",
+            "This is a\nfirst\nsub-div in div\nThis is a\nsecond\nsub-div in div\n",
         ],
     }
 
@@ -302,9 +308,11 @@ def test_parse_html_nested_example_max_length():
     plain_text, metadata = get_clean_text_and_metadata(
         html, tags_to_remove_with_content=tags_to_remove_with_content
     )
-    assert (
-        plain_text
-        == " This is a title  This is a sub-div in div This is a sub-div in div  This is a paragraph not in div  "
+    assert plain_text == (
+        "This is a title\n"
+        "This is a sub-div in div\n"
+        "This is a sub-div in div\n"
+        "This is a paragraph not in div\n"
     )
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
@@ -313,14 +321,19 @@ def test_parse_html_nested_example_max_length():
 
     target_content_plain_text = {
         "body": [
-            " This is a title  This is a sub-div in div This is a sub-div in div  This is a paragraph not in div "
+            (
+                "This is a title\n"
+                "This is a sub-div in div\n"
+                "This is a sub-div in div\n"
+                "This is a paragraph not in div\n"
+            )
         ],
         "h1": ["This is a title"],
         "p": ["This is a paragraph not in div"],
         "div": [
             "This is a sub-div in div",
             "This is a sub-div in div",
-            " This is a sub-div in div This is a sub-div in div ",
+            ("This is a sub-div in div\n" "This is a sub-div in div\n"),
         ],
     }
 
@@ -339,6 +352,7 @@ def test_parse_html_nested_example_min_length():
     </head>
     <body>
     <h1>This is a title</h1>
+    <div>small</div>
     <div>
     <div>This is a <div>first</div> sub-div in div</div>
     <div>This is a <div>second</div> sub-div in div</div>
@@ -353,16 +367,25 @@ def test_parse_html_nested_example_min_length():
     plain_text, metadata = get_clean_text_and_metadata(
         html, tags_to_remove_with_content=tags_to_remove_with_content
     )
-    assert plain_text == " This is a title This is a paragraph not in div  "
+    assert plain_text == (
+        "This is a title\n"
+        "small\n"
+        "This is a paragraph not in div\n"
+    )
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
 
-    assert len(metadata) == 3
+    assert len(metadata) == 4
 
     target_content_plain_text = {
-        "body": [" This is a title This is a paragraph not in div "],
+        "body": [(
+        "This is a title\n"
+        "small\n"
+        "This is a paragraph not in div\n"
+    )],
         "h1": ["This is a title"],
         "p": ["This is a paragraph not in div"],
+        "div": ["small"],
     }
 
     check_content_parsing(
@@ -395,8 +418,6 @@ def test_remove_all_table():
 <td>
 </td></tr></tbody></html>"""
     tags_to_remove_with_content = [
-        # TagToRemoveWithContent(tag="td", content_max_char_length=6),
-        # TagToRemoveWithContent(tag="tr", content_max_char_length=6),
         TagToRemoveWithContent(tag="tbody"),
         TagToRemoveWithContent(tag="td"),
     ]
@@ -406,15 +427,15 @@ def test_remove_all_table():
         tags_to_remove_with_content=tags_to_remove_with_content,
         attrs_to_keep=attrs_to_keep,
     )
-    assert plain_text == "  "
+    assert plain_text == ""
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
 
     assert len(metadata) == 2
 
     target_content_plain_text = {
-        "body": ["  "],
-        "caption": [" "],
+        "body": [""],
+        "caption": [""],
     }
 
     check_content_parsing(
@@ -466,7 +487,7 @@ def test_table():
     )
 
 
-def test_keep_everything():
+def test_table_keep_everything():
     html = """<html><body><table>
     <thead>
         <tr>
@@ -482,22 +503,21 @@ def test_keep_everything():
 </table></body></html>"""
     plain_text, metadata = get_clean_text_and_metadata(
         html,
-        # start_parsing_at_tag=None,
     )
-    assert plain_text == "   The table header     The table body with two columns   "
+    assert plain_text == "The table header\nThe table body with two columns\n"
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
 
     assert len(metadata) == 9
 
     target_content_plain_text = {
-        "table": ["   The table header     The table body with two columns   "],
-        "thead": ["  The table header  "],
-        "tr": [" The table header ", " The table body with two columns "],
+        "table": ["The table header\nThe table body with two columns\n"],
+        "thead": ["The table header\n"],
+        "tr": ["The table header\n", "The table body with two columns\n"],
         "th": ["The table header"],
-        "tbody": ["  The table body with two columns  "],
-        "td": ["The table body","with two columns"],
-        "body": ["   The table header     The table body with two columns   "]
+        "tbody": ["The table body with two columns\n"],
+        "td": ["The table body", "with two columns"],
+        "body": ["The table header\nThe table body with two columns\n"],
     }
 
     check_content_parsing(
@@ -515,15 +535,15 @@ def test_behavior_on_corrupt_examples():
         html,
         # start_parsing_at_tag=None,
     )
-    assert plain_text == " test >"
+    assert plain_text == "test >\n"
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
 
     assert len(metadata) == 2
 
     target_content_plain_text = {
-        "p": [" test >"],
-        "body": [" test >"],
+        "p": ["test >"],
+        "body": ["test >\n"],
     }
 
     check_content_parsing(
@@ -540,15 +560,15 @@ def test_behavior_on_corrupt_examples():
         html,
         # start_parsing_at_tag=None,
     )
-    assert plain_text == " test "
+    assert plain_text == "test\n"
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
 
     assert len(metadata) == 2
 
     target_content_plain_text = {
-        "a": [" test "],
-        "body": [" test "],
+        "a": ["test\n"],
+        "body": ["test\n"],
     }
     check_content_parsing(
         target_content_plain_text=target_content_plain_text,
@@ -557,3 +577,91 @@ def test_behavior_on_corrupt_examples():
         plain_text=plain_text,
     )
     assert metadata[0].value.attrs == {"href": "http://example.com"}
+
+
+def test_consecutive_tags():
+    # Corrupt 1: missing end tag value
+    html = (
+        "<html><body>"
+        "<h1>this is a title that we keep</h1>"
+        '<div class="div-level-1">blablabla<div class="div-level-2">tidi tidi</div></div>'
+        "</body></html>"
+    )
+    plain_text, metadata = get_clean_text_and_metadata(
+        html,
+    )
+    assert plain_text == (
+        "this is a title that we keep\n"
+        'blablabla\n'
+        'tidi tidi\n'
+    )
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+
+    assert len(metadata) == 2
+
+    target_content_plain_text = {
+        "h1": [(" test >",)],
+        "div": [(" test >",)],
+    }
+
+    check_content_parsing_and_metadata(
+        target_content_plain_text=target_content_plain_text,
+        target_metadata_tags=metadata_tags,
+        metadata=metadata,
+        plain_text=plain_text,
+    )
+    assert metadata[0].value.attrs == {}
+
+
+def check_content_parsing_and_metadata(
+    target_content_plain_text: str, target_metadata_tags, metadata, plain_text
+):
+    target_list_tags = []
+    for target_tag in target_content_plain_text.keys():
+        target_list_tags.extend(
+            [target_tag] * len(target_content_plain_text[target_tag])
+        )
+
+    for target_tag in target_list_tags:
+        assert target_tag in target_metadata_tags
+        target_metadata_tags.remove(target_tag)
+        find = False
+        for metadata_node in metadata:
+            if (
+                metadata_node.value.tag == target_tag
+                and metadata_node.value.attrs
+                == target_content_plain_text[target_tag][1]
+                and plain_text[
+                    metadata_node.char_start_idx : metadata_node.char_end_idx
+                ]
+                in target_content_plain_text[target_tag][0]
+            ):
+                find = True
+                target_content_plain_text[target_tag][0].remove(
+                    plain_text[
+                        metadata_node.char_start_idx : metadata_node.char_end_idx
+                    ]
+                )
+                if not target_content_plain_text[target_tag][0]:
+                    target_content_plain_text.pop(
+                        (target_tag, metadata_node.value.attrs)
+                    )
+                break
+
+        error_msg = f"Plain text not found for the tag '{target_tag}'"
+        if not find:
+            retrived_plain_text = "\n ".join(
+                [
+                    f"{metadata_node.value.tag}: {repr(plain_text[metadata_node.char_start_idx : metadata_node.char_end_idx])}"
+                    for metadata_node in metadata
+                ]
+            )
+            error_msg = f"{error_msg}\nThe plain text associated with each tags are:\n {retrived_plain_text} \nand the text to match with:\n{repr(plain_text[metadata_node.char_start_idx : metadata_node.char_end_idx])}"
+        assert find, error_msg
+
+    assert not target_content_plain_text
+    assert not target_metadata_tags
+
+
+# %%

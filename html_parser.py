@@ -81,6 +81,7 @@ INLINE_ELEMENTS_SPACING = [
     "time",
 ]
 
+PRE_TAG = "pre"
 PLAIN_TEXT_SEPARATOR = " "
 BLOCK_CONTENT_SEPARATOR = "\n"
 
@@ -231,17 +232,33 @@ def _preserve_tail_before_delete(node):
                 previous.tail = node.tail
             elif (
                 previous.text
+                and not previous.text.endswith(PLAIN_TEXT_SEPARATOR)
+                and not node.tail.startswith(PLAIN_TEXT_SEPARATOR)
+            ):
+                previous.text = previous.text + PLAIN_TEXT_SEPARATOR + node.tail
+            elif (
+                previous.text
                 and previous.text.endswith(PLAIN_TEXT_SEPARATOR)
                 and node.tail.startswith(PLAIN_TEXT_SEPARATOR)
             ):
                 # Don't accumulate too much spaces
                 previous.text = previous.text[: -len(PLAIN_TEXT_SEPARATOR)] + node.tail
+            elif (
+                previous.tail
+                and not previous.tail.endswith(PLAIN_TEXT_SEPARATOR)
+                and not node.tail.startswith(PLAIN_TEXT_SEPARATOR)
+            ):
+                previous.tail = previous.tail + PLAIN_TEXT_SEPARATOR + node.tail
             else:
                 previous.tail = previous.tail + node.tail
         else:  # The parent get the tail as text
             parent = node.getparent()
             if parent.text is None:
                 parent.text = node.tail
+            elif not parent.text.endswith(
+                PLAIN_TEXT_SEPARATOR
+            ) and not node.tail.startswith(PLAIN_TEXT_SEPARATOR):
+                parent.text = parent.text + PLAIN_TEXT_SEPARATOR + node.tail
             elif parent.text.endswith(PLAIN_TEXT_SEPARATOR) and node.tail.startswith(
                 PLAIN_TEXT_SEPARATOR
             ):
@@ -299,37 +316,92 @@ class TextAndMetadataCleaner:
         while previous_html_str != html_str:
             previous_html_str = html_str
             new_etree = fromstring(html_str)
-            
+
             self._clean_etree(new_etree)
 
             html_str = etree.tostring(
                 new_etree, method="html", encoding="UTF-8", pretty_print=False
             ).decode("UTF-8")
-            html_str = htmlmin.minify(html_str)
+            html_str = htmlmin.minify(html_str, keep_pre=True)
 
         # Traitement n°3: we separate the text from the list of metadata json that we keep
         self.metadata = []
         self._current_char_idx = 0
         self.text = ""
+        self.last_tag = None
 
         plain_text = self._get_text_and_metadata(new_etree)
 
         return plain_text, self.metadata
 
-    def _add_text(self, new_text):
+    def _add_text(self, tag, new_text):
+        print(tag, new_text)
+        if tag in BLOCK_ELEMENTS:
+            print(f"tag {tag} add block to {repr(self.text)}")
+            self.text = self._append_block_separator(self.text)
+        elif tag in INLINE_ELEMENTS_SPACING:
+            self.text = self._append_inline_element_separator(self.text)
+
         if new_text:
-            self._current_char_idx += len(new_text)
-            self.text += new_text
+            self._append_text_content(new_text)
+
+        self._current_char_idx = len(self.text)
+
+    def _append_text_content(self, txt):
+        if self.current_tag == PRE_TAG:
+            self.text += txt
+        else:
+            print("txt", txt)
+            txt = txt.replace("\u00a0", " ")
+
+            c = " "
+            if len(self.text) > 0:
+                c = self.text[-1]
+            for i in range(len(txt)):
+                c2 = txt[i]
+                if c2 == "\r" or c2 == "\n":
+                    c2 = " "
+                if not c.isspace() or not c2.isspace():
+                    self.text += c2
+                c = c2
+
+    def _append_block_separator(self, sb):
+        length = len(sb)
+        if length > 0:
+            # remove white space before paragraph break
+            # if self.last_tag != PRE_TAG:
+            #     while (length > 0 and sb[-1] == PLAIN_TEXT_SEPARATOR):
+            #         sb = sb[:-len(PLAIN_TEXT_SEPARATOR)]
+            if length > 0 and sb[-1] == PLAIN_TEXT_SEPARATOR:
+                sb = sb[:-1] + BLOCK_CONTENT_SEPARATOR
+            elif length > 0 and sb[-1] != BLOCK_CONTENT_SEPARATOR:
+                sb += BLOCK_CONTENT_SEPARATOR
+        return sb
+
+    def _append_inline_element_separator(self, sb):
+        length = len(sb)
+        if length > 0:
+            last_buffer_char = sb[-1]
+            if (
+                last_buffer_char != PLAIN_TEXT_SEPARATOR
+                and last_buffer_char != BLOCK_CONTENT_SEPARATOR
+            ):
+                sb += PLAIN_TEXT_SEPARATOR
+        return sb
 
     def _get_text_and_metadata(self, root):
+        self.current_tag = root.tag
+
         metadata_node = Metadata(
             char_start_idx=self._current_char_idx,
             value=HtmlTag(tag=root.tag, attrs=self.attribute_cleaner(root.attrib)),
         )
 
-        self._add_text(root.text)
+        self._add_text(root.tag, root.text)
         for idx, child in enumerate(root):
             _ = self._get_text_and_metadata(child)
+
+        self.current_tag = root.tag
 
         char_end_idx = self._current_char_idx
         if metadata_node.char_start_idx == self._current_char_idx:
@@ -345,7 +417,7 @@ class TextAndMetadataCleaner:
 
         metadata_node.char_end_idx = char_end_idx
 
-        self._add_text(root.tail)
+        self._add_text(root.tag, root.tail)
 
         if not self.tag_filter.drop_tag(tag=root.tag):
             self.metadata.append(metadata_node)
