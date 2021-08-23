@@ -335,9 +335,7 @@ class TextAndMetadataCleaner:
         return plain_text, self.metadata
 
     def _add_text(self, tag, new_text):
-        print(tag, new_text)
         if tag in BLOCK_ELEMENTS:
-            print(f"tag {tag} add block to {repr(self.text)}")
             self.text = self._append_block_separator(self.text)
         elif tag in INLINE_ELEMENTS_SPACING:
             self.text = self._append_inline_element_separator(self.text)

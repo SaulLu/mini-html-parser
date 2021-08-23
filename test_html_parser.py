@@ -50,6 +50,57 @@ def check_content_parsing(
     assert not target_metadata_tags
 
 
+def check_content_parsing_and_metadata(
+    target_content_plain_text: str, target_metadata_tags, metadata, plain_text
+):
+    target_list_tags = []
+    for target_tag in target_content_plain_text.keys():
+        target_list_tags.extend(
+            [target_tag] * len(target_content_plain_text[target_tag])
+        )
+
+    for target_tag in target_list_tags:
+        assert target_tag in target_metadata_tags
+        target_metadata_tags.remove(target_tag)
+        find = False
+        for metadata_node in metadata:
+            if (
+                metadata_node.value.tag == target_tag
+                and metadata_node.value.attrs
+                in [item[1] for item in target_content_plain_text[target_tag]]
+                and plain_text[
+                    metadata_node.char_start_idx : metadata_node.char_end_idx
+                ]
+                in [item[0] for item in target_content_plain_text[target_tag]]
+            ):
+                find = True
+                target_content_plain_text[target_tag].remove(
+                    (
+                        plain_text[
+                            metadata_node.char_start_idx : metadata_node.char_end_idx
+                        ],
+                        metadata_node.value.attrs,
+                    )
+                )
+                if not target_content_plain_text[target_tag]:
+                    target_content_plain_text.pop(target_tag)
+                break
+
+        error_msg = f"Plain text not found for the tag '{target_tag}'"
+        if not find:
+            retrived_plain_text = "\n ".join(
+                [
+                    f"{metadata_node.value.tag}: {repr(plain_text[metadata_node.char_start_idx : metadata_node.char_end_idx])}  {metadata_node.value.attrs}"
+                    for metadata_node in metadata
+                ]
+            )
+            error_msg = f"{error_msg}\nThe plain text associated with each tags are:\n {retrived_plain_text}"
+        assert find, error_msg
+
+    assert not target_content_plain_text
+    assert not target_metadata_tags
+
+
 #%%
 def test_parse_simple_html():
     html = """
@@ -368,9 +419,7 @@ def test_parse_html_nested_example_min_length():
         html, tags_to_remove_with_content=tags_to_remove_with_content
     )
     assert plain_text == (
-        "This is a title\n"
-        "small\n"
-        "This is a paragraph not in div\n"
+        "This is a title\n" "small\n" "This is a paragraph not in div\n"
     )
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
@@ -378,11 +427,7 @@ def test_parse_html_nested_example_min_length():
     assert len(metadata) == 4
 
     target_content_plain_text = {
-        "body": [(
-        "This is a title\n"
-        "small\n"
-        "This is a paragraph not in div\n"
-    )],
+        "body": [("This is a title\n" "small\n" "This is a paragraph not in div\n")],
         "h1": ["This is a title"],
         "p": ["This is a paragraph not in div"],
         "div": ["small"],
@@ -579,7 +624,7 @@ def test_behavior_on_corrupt_examples():
     assert metadata[0].value.attrs == {"href": "http://example.com"}
 
 
-def test_consecutive_tags():
+def test_attribs():
     # Corrupt 1: missing end tag value
     html = (
         "<html><body>"
@@ -590,19 +635,19 @@ def test_consecutive_tags():
     plain_text, metadata = get_clean_text_and_metadata(
         html,
     )
-    assert plain_text == (
-        "this is a title that we keep\n"
-        'blablabla\n'
-        'tidi tidi\n'
-    )
+    assert plain_text == ("this is a title that we keep\n" "blablabla\n" "tidi tidi\n")
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
 
-    assert len(metadata) == 2
+    assert len(metadata) == 4
 
     target_content_plain_text = {
-        "h1": [(" test >",)],
-        "div": [(" test >",)],
+        "body": [("this is a title that we keep\n" "blablabla\n" "tidi tidi\n", {})],
+        "h1": [("this is a title that we keep", {})],
+        "div": [
+            ("blablabla\ntidi tidi\n", {"class": "div-level-1"}),
+            ("\ntidi tidi", {"class": "div-level-2"}),
+        ],
     }
 
     check_content_parsing_and_metadata(
@@ -612,56 +657,6 @@ def test_consecutive_tags():
         plain_text=plain_text,
     )
     assert metadata[0].value.attrs == {}
-
-
-def check_content_parsing_and_metadata(
-    target_content_plain_text: str, target_metadata_tags, metadata, plain_text
-):
-    target_list_tags = []
-    for target_tag in target_content_plain_text.keys():
-        target_list_tags.extend(
-            [target_tag] * len(target_content_plain_text[target_tag])
-        )
-
-    for target_tag in target_list_tags:
-        assert target_tag in target_metadata_tags
-        target_metadata_tags.remove(target_tag)
-        find = False
-        for metadata_node in metadata:
-            if (
-                metadata_node.value.tag == target_tag
-                and metadata_node.value.attrs
-                == target_content_plain_text[target_tag][1]
-                and plain_text[
-                    metadata_node.char_start_idx : metadata_node.char_end_idx
-                ]
-                in target_content_plain_text[target_tag][0]
-            ):
-                find = True
-                target_content_plain_text[target_tag][0].remove(
-                    plain_text[
-                        metadata_node.char_start_idx : metadata_node.char_end_idx
-                    ]
-                )
-                if not target_content_plain_text[target_tag][0]:
-                    target_content_plain_text.pop(
-                        (target_tag, metadata_node.value.attrs)
-                    )
-                break
-
-        error_msg = f"Plain text not found for the tag '{target_tag}'"
-        if not find:
-            retrived_plain_text = "\n ".join(
-                [
-                    f"{metadata_node.value.tag}: {repr(plain_text[metadata_node.char_start_idx : metadata_node.char_end_idx])}"
-                    for metadata_node in metadata
-                ]
-            )
-            error_msg = f"{error_msg}\nThe plain text associated with each tags are:\n {retrived_plain_text} \nand the text to match with:\n{repr(plain_text[metadata_node.char_start_idx : metadata_node.char_end_idx])}"
-        assert find, error_msg
-
-    assert not target_content_plain_text
-    assert not target_metadata_tags
 
 
 # %%
