@@ -349,7 +349,6 @@ class TextAndMetadataCleaner:
         if self.current_tag == PRE_TAG:
             self.text += txt
         else:
-            print("txt", txt)
             txt = txt.replace("\u00a0", " ")
 
             c = " "
