@@ -625,7 +625,6 @@ def test_behavior_on_corrupt_examples():
 
 
 def test_attribs():
-    # Corrupt 1: missing end tag value
     html = (
         "<html><body>"
         "<h1>this is a title that we keep</h1>"
@@ -659,4 +658,110 @@ def test_attribs():
     assert metadata[0].value.attrs == {}
 
 
+def test_remove_consecutive_tag():
+    html = (
+        "<html><body>"
+        "<h1>this is a title that we keep</h1>"
+        '<div class="div-level-1" id=1>blablabla<div class="div-level-2" href="http">tidi tidi</div></div>'
+        "</body></html>"
+    )
+    tags_to_fold = ["div"]
+    plain_text, metadata = get_clean_text_and_metadata(html, tags_to_fold=tags_to_fold)
+    assert plain_text == ("this is a title that we keep\n" "blablabla\n" "tidi tidi\n")
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+
+    assert len(metadata) == 3
+
+    target_content_plain_text = {
+        "body": [("this is a title that we keep\n" "blablabla\n" "tidi tidi\n", {})],
+        "h1": [("this is a title that we keep", {})],
+        "div": [
+            (
+                "blablabla\ntidi tidi\n",
+                {"class": "div-level-1 div-level-2", "id": "1", "href": "http"},
+            ),
+        ],
+    }
+
+    check_content_parsing_and_metadata(
+        target_content_plain_text=target_content_plain_text,
+        target_metadata_tags=metadata_tags,
+        metadata=metadata,
+        plain_text=plain_text,
+    )
+    assert metadata[0].value.attrs == {}
+
+
+def test_remove_consecutive_tag_with_tag_to_remove():
+    html = (
+        "<html><body>"
+        "<h1 id=title>this is a title that we keep</h1>"
+        '<div class="div-level-1" id=1>blablabla<div class="div-level-2" href="http">tidi <span>tidi</span></div></div>'
+        "</body></html>"
+    )
+    tags_to_fold = ["div"]
+    tags_to_remove_alone = ["span"]
+    plain_text, metadata = get_clean_text_and_metadata(
+        html, tags_to_fold=tags_to_fold, tags_to_remove_alone=tags_to_remove_alone
+    )
+    assert plain_text == ("this is a title that we keep\n" "blablabla\n" "tidi tidi\n")
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+
+    assert len(metadata) == 3
+
+    target_content_plain_text = {
+        "body": [("this is a title that we keep\n" "blablabla\n" "tidi tidi\n", {})],
+        "h1": [("this is a title that we keep", {"id": "title"})],
+        "div": [
+            (
+                "blablabla\ntidi tidi\n",
+                {"class": "div-level-1 div-level-2", "id": "1", "href": "http"},
+            ),
+        ],
+    }
+
+    check_content_parsing_and_metadata(
+        target_content_plain_text=target_content_plain_text,
+        target_metadata_tags=metadata_tags,
+        metadata=metadata,
+        plain_text=plain_text,
+    )
+
+def test_remove_consecutive_tag_very_nested():
+    html = (
+        "<html><body>"
+        "<h1 id=title>this is a title that we keep</h1>"
+        '<div class="div-level-1" id=1>blablabla<div class="div-level-2" href="http">tidi <div id=3>tidi2</div></div></div>'
+        "</body></html>"
+    )
+    tags_to_fold = ["div"]
+    tags_to_remove_alone = ["span"]
+    plain_text, metadata = get_clean_text_and_metadata(
+        html, tags_to_fold=tags_to_fold, tags_to_remove_alone=tags_to_remove_alone
+    )
+    assert plain_text == ("this is a title that we keep\n" "blablabla\n" "tidi\ntidi2\n")
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+
+    assert len(metadata) == 3
+
+    target_content_plain_text = {
+        "body": [("this is a title that we keep\n" "blablabla\n" "tidi\ntidi2\n", {})],
+        "h1": [("this is a title that we keep", {"id": "title"})],
+        "div": [
+            (
+                "blablabla\ntidi\ntidi2\n",
+                {"class": "div-level-1 div-level-2", "id": "1 3", "href": "http"},
+            ),
+        ],
+    }
+
+    check_content_parsing_and_metadata(
+        target_content_plain_text=target_content_plain_text,
+        target_metadata_tags=metadata_tags,
+        metadata=metadata,
+        plain_text=plain_text,
+    )
 # %%

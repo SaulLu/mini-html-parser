@@ -11,6 +11,10 @@ from bs4 import BeautifulSoup
 from lxml import etree
 from lxml.html import fromstring
 
+FAKE_TAG_BLOCK = "fake_tag_block"
+FAKE_TAG_INLINE = "fake_tag_inline"
+FAKE_TAG_BASIC = "fake_tag_basic"
+
 BLOCK_ELEMENTS = [
     "address",
     "article",
@@ -61,7 +65,9 @@ BLOCK_ELEMENTS = [
     "tr",
     "ul",
     "video",
+    FAKE_TAG_BLOCK,
 ]
+
 INLINE_ELEMENTS_SPACING = [
     "address",
     "cite",
@@ -79,6 +85,7 @@ INLINE_ELEMENTS_SPACING = [
     "tbody",
     "td",
     "time",
+    FAKE_TAG_INLINE,
 ]
 
 PRE_TAG = "pre"
@@ -215,7 +222,43 @@ class TagFilter:
 
 
 class ConsecutiveTagCleaner:
-    pass
+    def __init__(
+        self,
+        tags_to_fold: Optional[List[str]],
+    ):
+        self.tags_to_fold = tags_to_fold if isinstance(tags_to_fold, list) else []
+        self.fake_tag_block = FAKE_TAG_BLOCK
+        self.fake_tag_inline = FAKE_TAG_INLINE
+        self.fake_tag_basic = FAKE_TAG_BASIC
+        self.attrib_separator = " "
+
+    def __call__(self, root):
+        tag = root.tag
+        if len(root) == 1:
+            print("\n", tag, root[0].tag, root.attrib)
+        if (
+            (tag in self.tags_to_fold and len(root) == 1 and root[0].tag == tag) or 
+            (tag in [FAKE_TAG_BLOCK, FAKE_TAG_INLINE, FAKE_TAG_BASIC] and len(root) == 1 and 'previous_tag' in root.attrib and root[0].tag == root.attrib["previous_tag"])
+        ):  # has 1 child
+            
+            if tag in BLOCK_ELEMENTS:
+                root[0].tag = self.fake_tag_block
+            elif tag in INLINE_ELEMENTS_SPACING:
+                root[0].tag = self.fake_tag_inline
+            else:
+                root[0].tag = self.fake_tag
+
+            parent_root = root
+            while parent_root.tag in [FAKE_TAG_BLOCK, FAKE_TAG_INLINE, FAKE_TAG_BASIC] :
+                parent_root = parent_root.getparent()
+
+            for key, value in root[0].attrib.items():
+                if key in parent_root.attrib:
+                    parent_root.attrib[key] += self.attrib_separator + value
+                else:
+                    parent_root.attrib[key] = value
+            root[0].attrib["previous_tag"] = tag
+                
 
 
 def remove_keeping_tail(element):
@@ -277,6 +320,7 @@ class TextAndMetadataCleaner:
         attrs_to_keep: Optional[List[str]] = None,
         start_parsing_at_tag: Optional[str] = "body",
         fold_consecutive_tags: Optional[List[str]] = None,
+        tags_to_fold: Optional[List[str]] = None,
     ):
         self.html_str = html_str
         self.tags_to_remove_with_content = tags_to_remove_with_content
@@ -284,6 +328,14 @@ class TextAndMetadataCleaner:
         self.attrs_to_keep = attrs_to_keep
         self.start_parsing_at_tag = start_parsing_at_tag
 
+        self.consecutive_tag_cleaner = ConsecutiveTagCleaner(tags_to_fold=tags_to_fold)
+        consecutive_tag_cleaner_take_tags = []
+        tags_to_remove_alone = (
+            [FAKE_TAG_BLOCK, FAKE_TAG_INLINE, FAKE_TAG_BASIC]
+            if tags_to_remove_alone is None
+            else tags_to_remove_alone
+            + [FAKE_TAG_BLOCK, FAKE_TAG_INLINE, FAKE_TAG_BASIC]
+        )
         self.attribute_cleaner = AttributeCleaner(attrs_to_keep=attrs_to_keep)
         self.tag_filter = TagFilter(
             tags_to_remove_alone=tags_to_remove_alone,
@@ -335,6 +387,9 @@ class TextAndMetadataCleaner:
         return plain_text, self.metadata
 
     def _add_text(self, tag, new_text):
+        print(
+            f"add text {new_text} with tag {tag} in BLOCK_ELEMENTS {tag in BLOCK_ELEMENTS} or in INLINE_ELEMENTS_SPACING {tag in INLINE_ELEMENTS_SPACING}"
+        )
         if tag in BLOCK_ELEMENTS:
             self.text = self._append_block_separator(self.text)
         elif tag in INLINE_ELEMENTS_SPACING:
@@ -425,6 +480,8 @@ class TextAndMetadataCleaner:
         self,
         root,
     ):
+        self.consecutive_tag_cleaner(root)
+
         # Top-Down deletion
         plain_text = etree.tostring(
             root, method="text", encoding="UTF-8", pretty_print=False
@@ -452,6 +509,7 @@ def get_clean_text_and_metadata(
     tags_to_remove_alone: Optional[List[str]] = None,
     attrs_to_keep: Optional[List[str]] = None,
     fold_consecutive_tags: Optional[List[str]] = None,
+    tags_to_fold: Optional[List[str]] = None,
 ):
     text_and_metadata_cleaner = TextAndMetadataCleaner(
         html_str=html_str,
@@ -460,5 +518,6 @@ def get_clean_text_and_metadata(
         attrs_to_keep=attrs_to_keep,
         start_parsing_at_tag="body",
         fold_consecutive_tags=fold_consecutive_tags,
+        tags_to_fold=tags_to_fold,
     )
     return text_and_metadata_cleaner.apply()
