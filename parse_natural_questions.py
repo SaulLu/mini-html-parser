@@ -11,10 +11,10 @@ import jsonlines
 import numpy as np
 import pandas as pd
 import six
-from tqdm import tqdm
 from joblib import Parallel, delayed
 from lxml import etree
 from lxml.html import fromstring
+from tqdm import tqdm
 
 from html_parser import TagToRemoveWithContent, get_clean_text_and_metadata
 
