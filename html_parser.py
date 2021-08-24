@@ -224,9 +224,9 @@ class TagFilter:
 class ConsecutiveTagCleaner:
     def __init__(
         self,
-        tags_to_fold: Optional[List[str]],
+        consecutive_tags_to_fold: Optional[List[str]],
     ):
-        self.tags_to_fold = tags_to_fold if isinstance(tags_to_fold, list) else []
+        self.consecutive_tags_to_fold = consecutive_tags_to_fold if isinstance(consecutive_tags_to_fold, list) else []
         self.fake_tag_block = FAKE_TAG_BLOCK
         self.fake_tag_inline = FAKE_TAG_INLINE
         self.fake_tag_basic = FAKE_TAG_BASIC
@@ -234,11 +234,13 @@ class ConsecutiveTagCleaner:
 
     def __call__(self, root):
         tag = root.tag
-        if (
-            (tag in self.tags_to_fold and len(root) == 1 and root[0].tag == tag) or 
-            (tag in [FAKE_TAG_BLOCK, FAKE_TAG_INLINE, FAKE_TAG_BASIC] and len(root) == 1 and 'previous_tag' in root.attrib and root[0].tag == root.attrib["previous_tag"])
+        if (tag in self.consecutive_tags_to_fold and len(root) == 1 and root[0].tag == tag) or (
+            tag in [FAKE_TAG_BLOCK, FAKE_TAG_INLINE, FAKE_TAG_BASIC]
+            and len(root) == 1
+            and "previous_tag" in root.attrib
+            and root[0].tag == root.attrib["previous_tag"]
         ):  # has 1 child
-            
+
             if tag in BLOCK_ELEMENTS:
                 root[0].tag = self.fake_tag_block
             elif tag in INLINE_ELEMENTS_SPACING:
@@ -247,7 +249,7 @@ class ConsecutiveTagCleaner:
                 root[0].tag = self.fake_tag
 
             parent_root = root
-            while parent_root.tag in [FAKE_TAG_BLOCK, FAKE_TAG_INLINE, FAKE_TAG_BASIC] :
+            while parent_root.tag in [FAKE_TAG_BLOCK, FAKE_TAG_INLINE, FAKE_TAG_BASIC]:
                 parent_root = parent_root.getparent()
 
             for key, value in root[0].attrib.items():
@@ -256,7 +258,6 @@ class ConsecutiveTagCleaner:
                 else:
                     parent_root.attrib[key] = value
             root[0].attrib["previous_tag"] = tag
-                
 
 
 def remove_keeping_tail(element):
@@ -317,8 +318,7 @@ class TextAndMetadataCleaner:
         tags_to_remove_alone: Optional[List[str]] = None,
         attrs_to_keep: Optional[List[str]] = None,
         start_parsing_at_tag: Optional[str] = "body",
-        fold_consecutive_tags: Optional[List[str]] = None,
-        tags_to_fold: Optional[List[str]] = None,
+        consecutive_tags_to_fold: Optional[List[str]] = None,
     ):
         self.html_str = html_str
         self.tags_to_remove_with_content = tags_to_remove_with_content
@@ -326,7 +326,7 @@ class TextAndMetadataCleaner:
         self.attrs_to_keep = attrs_to_keep
         self.start_parsing_at_tag = start_parsing_at_tag
 
-        self.consecutive_tag_cleaner = ConsecutiveTagCleaner(tags_to_fold=tags_to_fold)
+        self.consecutive_tag_cleaner = ConsecutiveTagCleaner(consecutive_tags_to_fold=consecutive_tags_to_fold)
         consecutive_tag_cleaner_take_tags = []
         tags_to_remove_alone = (
             [FAKE_TAG_BLOCK, FAKE_TAG_INLINE, FAKE_TAG_BASIC]
@@ -503,8 +503,7 @@ def get_clean_text_and_metadata(
     tags_to_remove_with_content: Optional[List[TagToRemoveWithContent]] = None,
     tags_to_remove_alone: Optional[List[str]] = None,
     attrs_to_keep: Optional[List[str]] = None,
-    fold_consecutive_tags: Optional[List[str]] = None,
-    tags_to_fold: Optional[List[str]] = None,
+    consecutive_tags_to_fold: Optional[List[str]] = None,
 ):
     text_and_metadata_cleaner = TextAndMetadataCleaner(
         html_str=html_str,
@@ -512,7 +511,6 @@ def get_clean_text_and_metadata(
         tags_to_remove_alone=tags_to_remove_alone,
         attrs_to_keep=attrs_to_keep,
         start_parsing_at_tag="body",
-        fold_consecutive_tags=fold_consecutive_tags,
-        tags_to_fold=tags_to_fold,
+        consecutive_tags_to_fold=consecutive_tags_to_fold,
     )
     return text_and_metadata_cleaner.apply()
