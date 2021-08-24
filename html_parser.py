@@ -92,6 +92,11 @@ PRE_TAG = "pre"
 PLAIN_TEXT_SEPARATOR = " "
 BLOCK_CONTENT_SEPARATOR = "\n"
 
+@dataclass
+class TagToRemove:
+    tag: str
+    content_min_char_length: int = 0
+    content_max_char_length: int = float("inf")
 
 @dataclass
 class TagToRemoveWithContent:
@@ -153,11 +158,16 @@ class AttributeCleaner:
 class TagFilter:
     def __init__(
         self,
-        tags_to_remove_alone: Optional[List[str]],
+        tags_to_remove_alone: Optional[List[TagToRemove]],
         tags_to_remove_with_content: Optional[List[TagToRemoveWithContent]],
     ):
         self.tags_to_remove_alone = (
-            tags_to_remove_alone if isinstance(tags_to_remove_alone, list) else []
+            {
+                tag_to_remove.tag: tag_to_remove
+                for tag_to_remove in tags_to_remove_alone
+            }
+            if isinstance(tags_to_remove_alone, list)
+            else {}
         )
         self.tags_to_remove_with_content = (
             {
@@ -178,11 +188,21 @@ class TagFilter:
                 )
         # todo sanitize tags_to_remove_with_content
 
-    def drop_tag(self, tag: str):
-        if not isinstance(tag, str):
-            tag = str(tag)
-            # raise TypeError(f"tag need to be a string not a {type(tag)}")
-        return False if tag not in self.tags_to_remove_alone else True
+    def drop_tag(self, metadata_node):
+        tag = str(metadata_node.value.tag)
+        if tag not in self.tags_to_remove_alone:
+            return False
+        
+        tag_to_remove_characteristics = self.tags_to_remove_alone[tag]
+        content_char_length = metadata_node.char_end_idx - metadata_node.char_start_idx if metadata_node.char_end_idx is not None else 0
+        if (
+            content_char_length <= tag_to_remove_characteristics.content_max_char_length
+            and content_char_length
+            >= tag_to_remove_characteristics.content_min_char_length
+        ):
+            return True
+        # raise TypeError(f"tag need to be a string not a {type(tag)}")
+        return False
 
     def drop_tag_and_content_top_down(self, tag: str, text: str):
         if tag not in self.tags_to_remove_with_content:
@@ -315,7 +335,7 @@ class TextAndMetadataCleaner:
         self,
         html_str,
         tags_to_remove_with_content: Optional[List[TagToRemoveWithContent]] = None,
-        tags_to_remove_alone: Optional[List[str]] = None,
+        tags_to_remove_alone: Optional[List[TagToRemove]] = None,
         attrs_to_keep: Optional[List[str]] = None,
         start_parsing_at_tag: Optional[str] = "body",
         consecutive_tags_to_fold: Optional[List[str]] = None,
@@ -329,10 +349,10 @@ class TextAndMetadataCleaner:
         self.consecutive_tag_cleaner = ConsecutiveTagCleaner(consecutive_tags_to_fold=consecutive_tags_to_fold)
         consecutive_tag_cleaner_take_tags = []
         tags_to_remove_alone = (
-            [FAKE_TAG_BLOCK, FAKE_TAG_INLINE, FAKE_TAG_BASIC]
+            [TagToRemove(FAKE_TAG_BLOCK), TagToRemove(FAKE_TAG_INLINE), TagToRemove(FAKE_TAG_BASIC)]
             if tags_to_remove_alone is None
             else tags_to_remove_alone
-            + [FAKE_TAG_BLOCK, FAKE_TAG_INLINE, FAKE_TAG_BASIC]
+            + [TagToRemove(FAKE_TAG_BLOCK), TagToRemove(FAKE_TAG_INLINE), TagToRemove(FAKE_TAG_BASIC)]
         )
         self.attribute_cleaner = AttributeCleaner(attrs_to_keep=attrs_to_keep)
         self.tag_filter = TagFilter(
@@ -351,11 +371,8 @@ class TextAndMetadataCleaner:
                 new_etree, method="html", encoding="UTF-8", pretty_print=False
             ).decode("UTF-8")
             if not html_str.startswith("<html>"):
-                self.tag_filter.tags_to_remove_alone = (
-                    self.tag_filter.tags_to_remove_alone + ["html"]
-                    if self.tag_filter.tags_to_remove_alone
-                    else ["html"]
-                )
+                self.tag_filter.tags_to_remove_alone.update({"html": TagToRemove("html")})
+                
                 # need to re-add html tag otherwise the fromstring` do something strange
                 html_str = f"<html>{html_str}</html>"
 
@@ -466,7 +483,7 @@ class TextAndMetadataCleaner:
 
         self._add_text(root.tag, root.tail)
 
-        if not self.tag_filter.drop_tag(tag=root.tag):
+        if not self.tag_filter.drop_tag(metadata_node=metadata_node):
             self.metadata.append(metadata_node)
 
         return self.text

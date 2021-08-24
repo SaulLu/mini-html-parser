@@ -1,7 +1,7 @@
 #%%
 import pytest
 
-from html_parser import TagToRemoveWithContent, get_clean_text_and_metadata
+from html_parser import TagToRemoveWithContent, get_clean_text_and_metadata, TagToRemove
 
 
 def check_content_parsing(
@@ -143,7 +143,7 @@ def test_parse_html_remove_tag_alone():
     </body>
     </html>
 """
-    tags_to_remove_alone = ["body"]
+    tags_to_remove_alone = [TagToRemove("body")]
     plain_text, metadata = get_clean_text_and_metadata(
         html, tags_to_remove_alone=tags_to_remove_alone
     )
@@ -665,8 +665,8 @@ def test_remove_consecutive_tag():
         '<div class="div-level-1" id=1>blablabla<div class="div-level-2" href="http">tidi tidi</div></div>'
         "</body></html>"
     )
-    tags_to_fold = ["div"]
-    plain_text, metadata = get_clean_text_and_metadata(html, tags_to_fold=tags_to_fold)
+    consecutive_tags_to_fold = ["div"]
+    plain_text, metadata = get_clean_text_and_metadata(html, consecutive_tags_to_fold=consecutive_tags_to_fold)
     assert plain_text == ("this is a title that we keep\n" "blablabla\n" "tidi tidi\n")
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
@@ -700,10 +700,10 @@ def test_remove_consecutive_tag_with_tag_to_remove():
         '<div class="div-level-1" id=1>blablabla<div class="div-level-2" href="http">tidi <span>tidi</span></div></div>'
         "</body></html>"
     )
-    tags_to_fold = ["div"]
-    tags_to_remove_alone = ["span"]
+    consecutive_tags_to_fold = ["div"]
+    tags_to_remove_alone = [TagToRemove("span")]
     plain_text, metadata = get_clean_text_and_metadata(
-        html, tags_to_fold=tags_to_fold, tags_to_remove_alone=tags_to_remove_alone
+        html, consecutive_tags_to_fold=consecutive_tags_to_fold, tags_to_remove_alone=tags_to_remove_alone
     )
     assert plain_text == ("this is a title that we keep\n" "blablabla\n" "tidi tidi\n")
 
@@ -729,6 +729,7 @@ def test_remove_consecutive_tag_with_tag_to_remove():
         plain_text=plain_text,
     )
 
+
 def test_remove_consecutive_tag_very_nested():
     html = (
         "<html><body>"
@@ -736,12 +737,14 @@ def test_remove_consecutive_tag_very_nested():
         '<div class="div-level-1" id=1>blablabla<div class="div-level-2" href="http">tidi <div id=3>tidi2</div></div></div>'
         "</body></html>"
     )
-    tags_to_fold = ["div"]
-    tags_to_remove_alone = ["span"]
+    consecutive_tags_to_fold = ["div"]
+    tags_to_remove_alone = [TagToRemove("span")]
     plain_text, metadata = get_clean_text_and_metadata(
-        html, tags_to_fold=tags_to_fold, tags_to_remove_alone=tags_to_remove_alone
+        html, consecutive_tags_to_fold=consecutive_tags_to_fold, tags_to_remove_alone=tags_to_remove_alone
     )
-    assert plain_text == ("this is a title that we keep\n" "blablabla\n" "tidi\ntidi2\n")
+    assert plain_text == (
+        "this is a title that we keep\n" "blablabla\n" "tidi\ntidi2\n"
+    )
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
 
@@ -756,6 +759,45 @@ def test_remove_consecutive_tag_very_nested():
                 {"class": "div-level-1 div-level-2", "id": "1 3", "href": "http"},
             ),
         ],
+    }
+
+    check_content_parsing_and_metadata(
+        target_content_plain_text=target_content_plain_text,
+        target_metadata_tags=metadata_tags,
+        metadata=metadata,
+        plain_text=plain_text,
+    )
+
+def test_min_len_to_include_tag():
+    html = (
+        "<html><body>"
+        "<h1 id=title>this is a title that we keep</h1>"
+        '<div class="div-level-1" id=1>blablabla<div class="div-level-2" href="http">tidi <span id=3>tidi2</span> <span id=3>this one keep his tag</span></div></div>'
+        "</body></html>"
+    )
+    consecutive_tags_to_fold = ["div"]
+    tags_to_remove_alone = [TagToRemove("span", content_max_char_length=5)]
+    plain_text, metadata = get_clean_text_and_metadata(
+        html, consecutive_tags_to_fold=consecutive_tags_to_fold, tags_to_remove_alone=tags_to_remove_alone
+    )
+    assert plain_text == (
+        "this is a title that we keep\n" "blablabla\n" "tidi tidi2 this one keep his tag\n"
+    )
+
+    metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
+
+    assert len(metadata) == 4
+
+    target_content_plain_text = {
+        "body": [("this is a title that we keep\n" "blablabla\n" "tidi tidi2 this one keep his tag\n", {})],
+        "h1": [("this is a title that we keep", {"id": "title"})],
+        "div": [
+            (
+                "blablabla\ntidi tidi2 this one keep his tag\n",
+                {"class": "div-level-1 div-level-2", "id": "1", "href": "http"},
+            ),
+        ],
+        "span": [("this one keep his tag", {'id': '3'})]
     }
 
     check_content_parsing_and_metadata(
