@@ -1,7 +1,8 @@
 #%%
 import pytest
 
-from html_parser import TagToRemoveWithContent, get_clean_text_and_metadata, TagToRemove
+from html_parser import (TagToRemove, TagToRemoveWithContent,
+                         get_clean_text_and_metadata)
 
 
 def check_content_parsing(
@@ -666,7 +667,9 @@ def test_remove_consecutive_tag():
         "</body></html>"
     )
     consecutive_tags_to_fold = ["div"]
-    plain_text, metadata = get_clean_text_and_metadata(html, consecutive_tags_to_fold=consecutive_tags_to_fold)
+    plain_text, metadata = get_clean_text_and_metadata(
+        html, consecutive_tags_to_fold=consecutive_tags_to_fold
+    )
     assert plain_text == ("this is a title that we keep\n" "blablabla\n" "tidi tidi\n")
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
@@ -703,7 +706,9 @@ def test_remove_consecutive_tag_with_tag_to_remove():
     consecutive_tags_to_fold = ["div"]
     tags_to_remove_alone = [TagToRemove("span")]
     plain_text, metadata = get_clean_text_and_metadata(
-        html, consecutive_tags_to_fold=consecutive_tags_to_fold, tags_to_remove_alone=tags_to_remove_alone
+        html,
+        consecutive_tags_to_fold=consecutive_tags_to_fold,
+        tags_to_remove_alone=tags_to_remove_alone,
     )
     assert plain_text == ("this is a title that we keep\n" "blablabla\n" "tidi tidi\n")
 
@@ -740,7 +745,9 @@ def test_remove_consecutive_tag_very_nested():
     consecutive_tags_to_fold = ["div"]
     tags_to_remove_alone = [TagToRemove("span")]
     plain_text, metadata = get_clean_text_and_metadata(
-        html, consecutive_tags_to_fold=consecutive_tags_to_fold, tags_to_remove_alone=tags_to_remove_alone
+        html,
+        consecutive_tags_to_fold=consecutive_tags_to_fold,
+        tags_to_remove_alone=tags_to_remove_alone,
     )
     assert plain_text == (
         "this is a title that we keep\n" "blablabla\n" "tidi\ntidi2\n"
@@ -768,6 +775,7 @@ def test_remove_consecutive_tag_very_nested():
         plain_text=plain_text,
     )
 
+
 def test_min_len_to_include_tag():
     html = (
         "<html><body>"
@@ -778,10 +786,14 @@ def test_min_len_to_include_tag():
     consecutive_tags_to_fold = ["div"]
     tags_to_remove_alone = [TagToRemove("span", content_max_char_length=5)]
     plain_text, metadata = get_clean_text_and_metadata(
-        html, consecutive_tags_to_fold=consecutive_tags_to_fold, tags_to_remove_alone=tags_to_remove_alone
+        html,
+        consecutive_tags_to_fold=consecutive_tags_to_fold,
+        tags_to_remove_alone=tags_to_remove_alone,
     )
     assert plain_text == (
-        "this is a title that we keep\n" "blablabla\n" "tidi tidi2 this one keep his tag\n"
+        "this is a title that we keep\n"
+        "blablabla\n"
+        "tidi tidi2 this one keep his tag\n"
     )
 
     metadata_tags = [metadata_node.value.tag for metadata_node in metadata]
@@ -789,7 +801,14 @@ def test_min_len_to_include_tag():
     assert len(metadata) == 4
 
     target_content_plain_text = {
-        "body": [("this is a title that we keep\n" "blablabla\n" "tidi tidi2 this one keep his tag\n", {})],
+        "body": [
+            (
+                "this is a title that we keep\n"
+                "blablabla\n"
+                "tidi tidi2 this one keep his tag\n",
+                {},
+            )
+        ],
         "h1": [("this is a title that we keep", {"id": "title"})],
         "div": [
             (
@@ -797,7 +816,7 @@ def test_min_len_to_include_tag():
                 {"class": "div-level-1 div-level-2", "id": "1", "href": "http"},
             ),
         ],
-        "span": [("this one keep his tag", {'id': '3'})]
+        "span": [("this one keep his tag", {"id": "3"})],
     }
 
     check_content_parsing_and_metadata(
@@ -806,4 +825,6 @@ def test_min_len_to_include_tag():
         metadata=metadata,
         plain_text=plain_text,
     )
+
+
 # %%

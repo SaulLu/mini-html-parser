@@ -92,11 +92,13 @@ PRE_TAG = "pre"
 PLAIN_TEXT_SEPARATOR = " "
 BLOCK_CONTENT_SEPARATOR = "\n"
 
+
 @dataclass
 class TagToRemove:
     tag: str
     content_min_char_length: int = 0
     content_max_char_length: int = float("inf")
+
 
 @dataclass
 class TagToRemoveWithContent:
@@ -162,10 +164,7 @@ class TagFilter:
         tags_to_remove_with_content: Optional[List[TagToRemoveWithContent]],
     ):
         self.tags_to_remove_alone = (
-            {
-                tag_to_remove.tag: tag_to_remove
-                for tag_to_remove in tags_to_remove_alone
-            }
+            {tag_to_remove.tag: tag_to_remove for tag_to_remove in tags_to_remove_alone}
             if isinstance(tags_to_remove_alone, list)
             else {}
         )
@@ -192,9 +191,13 @@ class TagFilter:
         tag = str(metadata_node.value.tag)
         if tag not in self.tags_to_remove_alone:
             return False
-        
+
         tag_to_remove_characteristics = self.tags_to_remove_alone[tag]
-        content_char_length = metadata_node.char_end_idx - metadata_node.char_start_idx if metadata_node.char_end_idx is not None else 0
+        content_char_length = (
+            metadata_node.char_end_idx - metadata_node.char_start_idx
+            if metadata_node.char_end_idx is not None
+            else 0
+        )
         if (
             content_char_length <= tag_to_remove_characteristics.content_max_char_length
             and content_char_length
@@ -246,7 +249,11 @@ class ConsecutiveTagCleaner:
         self,
         consecutive_tags_to_fold: Optional[List[str]],
     ):
-        self.consecutive_tags_to_fold = consecutive_tags_to_fold if isinstance(consecutive_tags_to_fold, list) else []
+        self.consecutive_tags_to_fold = (
+            consecutive_tags_to_fold
+            if isinstance(consecutive_tags_to_fold, list)
+            else []
+        )
         self.fake_tag_block = FAKE_TAG_BLOCK
         self.fake_tag_inline = FAKE_TAG_INLINE
         self.fake_tag_basic = FAKE_TAG_BASIC
@@ -254,7 +261,11 @@ class ConsecutiveTagCleaner:
 
     def __call__(self, root):
         tag = root.tag
-        if (tag in self.consecutive_tags_to_fold and len(root) == 1 and root[0].tag == tag) or (
+        if (
+            tag in self.consecutive_tags_to_fold
+            and len(root) == 1
+            and root[0].tag == tag
+        ) or (
             tag in [FAKE_TAG_BLOCK, FAKE_TAG_INLINE, FAKE_TAG_BASIC]
             and len(root) == 1
             and "previous_tag" in root.attrib
@@ -346,13 +357,23 @@ class TextAndMetadataCleaner:
         self.attrs_to_keep = attrs_to_keep
         self.start_parsing_at_tag = start_parsing_at_tag
 
-        self.consecutive_tag_cleaner = ConsecutiveTagCleaner(consecutive_tags_to_fold=consecutive_tags_to_fold)
+        self.consecutive_tag_cleaner = ConsecutiveTagCleaner(
+            consecutive_tags_to_fold=consecutive_tags_to_fold
+        )
         consecutive_tag_cleaner_take_tags = []
         tags_to_remove_alone = (
-            [TagToRemove(FAKE_TAG_BLOCK), TagToRemove(FAKE_TAG_INLINE), TagToRemove(FAKE_TAG_BASIC)]
+            [
+                TagToRemove(FAKE_TAG_BLOCK),
+                TagToRemove(FAKE_TAG_INLINE),
+                TagToRemove(FAKE_TAG_BASIC),
+            ]
             if tags_to_remove_alone is None
             else tags_to_remove_alone
-            + [TagToRemove(FAKE_TAG_BLOCK), TagToRemove(FAKE_TAG_INLINE), TagToRemove(FAKE_TAG_BASIC)]
+            + [
+                TagToRemove(FAKE_TAG_BLOCK),
+                TagToRemove(FAKE_TAG_INLINE),
+                TagToRemove(FAKE_TAG_BASIC),
+            ]
         )
         self.attribute_cleaner = AttributeCleaner(attrs_to_keep=attrs_to_keep)
         self.tag_filter = TagFilter(
@@ -371,8 +392,10 @@ class TextAndMetadataCleaner:
                 new_etree, method="html", encoding="UTF-8", pretty_print=False
             ).decode("UTF-8")
             if not html_str.startswith("<html>"):
-                self.tag_filter.tags_to_remove_alone.update({"html": TagToRemove("html")})
-                
+                self.tag_filter.tags_to_remove_alone.update(
+                    {"html": TagToRemove("html")}
+                )
+
                 # need to re-add html tag otherwise the fromstring` do something strange
                 html_str = f"<html>{html_str}</html>"
 
