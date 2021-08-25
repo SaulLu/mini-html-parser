@@ -111,7 +111,7 @@ class TagToRemoveWithContent:
 @dataclass
 class HtmlTag:
     tag: str
-    attrs: List[Optional[Tuple[str]]]
+    attrs: dict
 
 
 @dataclass
@@ -128,32 +128,25 @@ class AttributeCleaner:
     def __init__(self, attrs_to_keep: Optional[List[str]]):
         self.attrs_to_keep = attrs_to_keep
 
+    def _test(self, attr):
+        return self.attrs_to_keep is None or attr in self.attrs_to_keep
+
     def __call__(self, attrs: List[Tuple[str]]):
-        if isinstance(attrs, dict):
+        if isinstance(attrs, list):
+            attrbs = [attr for attr, value in attrs if self._test(attr)]
+            values = [value for attr, value in attrs if self._test(attr)]
             return {
-                attr: value
-                for (attr, value) in attrs.items()
-                if self.attrs_to_keep is None or attr in self.attrs_to_keep
-            }
-        elif isinstance(attrs, list):
-            return {
-                attr: value
-                for attr, value in attrs
-                if self.attrs_to_keep is None or attr in self.attrs_to_keep
-            }
-        elif isinstance(attrs, lxml.etree._Attrib):
-            attrs = dict(attrs)
-            return {
-                attr: value
-                for attr, value in attrs.items()
-                if self.attrs_to_keep is None or attr in self.attrs_to_keep
+                "attr": attrbs,
+                "value": values,
             }
         else:
             attrs = dict(attrs)
+
+            attrbs = [attr for attr, value in attrs.items() if self._test(attr)]
+            values = [value for attr, value in attrs.items() if self._test(attr)]
             return {
-                attr: value
-                for attr, value in attrs.items()
-                if self.attrs_to_keep is None or attr in self.attrs_to_keep
+                "attr": attrbs,
+                "value": values,
             }
 
 

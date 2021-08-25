@@ -1,8 +1,7 @@
 #%%
 import pytest
 
-from html_parser import (TagToRemove, TagToRemoveWithContent,
-                         get_clean_text_and_metadata)
+from html_parser import TagToRemove, TagToRemoveWithContent, get_clean_text_and_metadata
 
 
 def check_content_parsing(
@@ -598,7 +597,7 @@ def test_behavior_on_corrupt_examples():
         metadata=metadata,
         plain_text=plain_text,
     )
-    assert metadata[0].value.attrs == {}
+    assert metadata[0].value.attrs == {'attr': [], 'value': []} 
 
     # Corrupt 2: unnecessary "
     html = """<a href="http://example.com""> test </a>"""
@@ -622,7 +621,7 @@ def test_behavior_on_corrupt_examples():
         metadata=metadata,
         plain_text=plain_text,
     )
-    assert metadata[0].value.attrs == {"href": "http://example.com"}
+    assert metadata[0].value.attrs == {'attr': ['href'], 'value': ['http://example.com']}
 
 
 def test_attribs():
@@ -642,11 +641,11 @@ def test_attribs():
     assert len(metadata) == 4
 
     target_content_plain_text = {
-        "body": [("this is a title that we keep\n" "blablabla\n" "tidi tidi\n", {})],
-        "h1": [("this is a title that we keep", {})],
+        "body": [("this is a title that we keep\n" "blablabla\n" "tidi tidi\n", {'attr': [], 'value': []})],
+        "h1": [("this is a title that we keep", {'attr': [], 'value': []})],
         "div": [
-            ("blablabla\ntidi tidi\n", {"class": "div-level-1"}),
-            ("\ntidi tidi", {"class": "div-level-2"}),
+            ("blablabla\ntidi tidi\n", {'attr': ['class'], 'value': ['div-level-1']}),
+            ("\ntidi tidi", {'attr': ['class'], 'value': ['div-level-2']}),
         ],
     }
 
@@ -656,7 +655,6 @@ def test_attribs():
         metadata=metadata,
         plain_text=plain_text,
     )
-    assert metadata[0].value.attrs == {}
 
 
 def test_remove_consecutive_tag():
@@ -677,12 +675,12 @@ def test_remove_consecutive_tag():
     assert len(metadata) == 3
 
     target_content_plain_text = {
-        "body": [("this is a title that we keep\n" "blablabla\n" "tidi tidi\n", {})],
-        "h1": [("this is a title that we keep", {})],
+        "body": [("this is a title that we keep\n" "blablabla\n" "tidi tidi\n", {'attr': [], 'value': []})],
+        "h1": [("this is a title that we keep", {'attr': [], 'value': []})],
         "div": [
             (
                 "blablabla\ntidi tidi\n",
-                {"class": "div-level-1 div-level-2", "id": "1", "href": "http"},
+                {'attr': ['class', 'id', 'href'], 'value': ['div-level-1 div-level-2', '1', 'http']},
             ),
         ],
     }
@@ -693,7 +691,6 @@ def test_remove_consecutive_tag():
         metadata=metadata,
         plain_text=plain_text,
     )
-    assert metadata[0].value.attrs == {}
 
 
 def test_remove_consecutive_tag_with_tag_to_remove():
@@ -717,12 +714,12 @@ def test_remove_consecutive_tag_with_tag_to_remove():
     assert len(metadata) == 3
 
     target_content_plain_text = {
-        "body": [("this is a title that we keep\n" "blablabla\n" "tidi tidi\n", {})],
-        "h1": [("this is a title that we keep", {"id": "title"})],
+        "body": [("this is a title that we keep\n" "blablabla\n" "tidi tidi\n", {'attr': [], 'value': []})],
+        "h1": [("this is a title that we keep",  {'attr': ['id'], 'value': ['title']})],
         "div": [
             (
                 "blablabla\ntidi tidi\n",
-                {"class": "div-level-1 div-level-2", "id": "1", "href": "http"},
+                {'attr': ['class', 'id', 'href'], 'value': ['div-level-1 div-level-2', '1', 'http']},
             ),
         ],
     }
@@ -758,12 +755,12 @@ def test_remove_consecutive_tag_very_nested():
     assert len(metadata) == 3
 
     target_content_plain_text = {
-        "body": [("this is a title that we keep\n" "blablabla\n" "tidi\ntidi2\n", {})],
-        "h1": [("this is a title that we keep", {"id": "title"})],
+        "body": [("this is a title that we keep\n" "blablabla\n" "tidi\ntidi2\n", {'attr': [], 'value': []})],
+        "h1": [("this is a title that we keep", {'attr': ['id'], 'value': ['title']})],
         "div": [
             (
                 "blablabla\ntidi\ntidi2\n",
-                {"class": "div-level-1 div-level-2", "id": "1 3", "href": "http"},
+                {'attr': ['class', 'id', 'href'], 'value': ['div-level-1 div-level-2', '1 3', 'http']},
             ),
         ],
     }
@@ -806,17 +803,17 @@ def test_min_len_to_include_tag():
                 "this is a title that we keep\n"
                 "blablabla\n"
                 "tidi tidi2 this one keep his tag\n",
-                {},
+                {'attr': [], 'value': []},
             )
         ],
-        "h1": [("this is a title that we keep", {"id": "title"})],
+        "h1": [("this is a title that we keep", {'attr': ['id'], 'value': ['title']})],
         "div": [
             (
                 "blablabla\ntidi tidi2 this one keep his tag\n",
-                {"class": "div-level-1 div-level-2", "id": "1", "href": "http"},
+                {'attr': ['class', 'id', 'href'], 'value': ['div-level-1 div-level-2', '1', 'http']},
             ),
         ],
-        "span": [("this one keep his tag", {"id": "3"})],
+        "span": [("this one keep his tag", {'attr': ['id'], 'value': ['3']})],
     }
 
     check_content_parsing_and_metadata(
