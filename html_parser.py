@@ -119,7 +119,6 @@ class Metadata:
     char_start_idx: int
     value: HtmlTag
     char_end_idx: Optional[int] = None
-    self_closing: Optional[bool] = False
     key: str = "html"
     type: str = "local"
 
@@ -136,19 +135,18 @@ class AttributeCleaner:
             attrbs = [attr for attr, value in attrs if self._test(attr)]
             values = [value for attr, value in attrs if self._test(attr)]
             return {
-                "attr": attrbs,
-                "value": values,
+                "attr":attrbs,
+                "value":values, 
             }
-        else:
+        else :
             attrs = dict(attrs)
 
             attrbs = [attr for attr, value in attrs.items() if self._test(attr)]
             values = [value for attr, value in attrs.items() if self._test(attr)]
             return {
-                "attr": attrbs,
-                "value": values,
+                "attr":attrbs,
+                "value":values, 
             }
-
 
 class TagFilter:
     def __init__(
@@ -484,16 +482,6 @@ class TextAndMetadataCleaner:
         self.current_tag = root.tag
 
         char_end_idx = self._current_char_idx
-        if metadata_node.char_start_idx == self._current_char_idx:
-            # There is not content between the tags
-            char_end_idx = None
-
-            # Check if it's a self-closing tag
-            tag_rendering = etree.tostring(
-                root, method="html", encoding="UTF-8", pretty_print=False
-            ).decode("UTF-8")
-            if len(tag_rendering.split(root.tag)) == 2:
-                metadata_node.self_closing = True
 
         metadata_node.char_end_idx = char_end_idx
 
