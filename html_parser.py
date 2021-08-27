@@ -135,18 +135,19 @@ class AttributeCleaner:
             attrbs = [attr for attr, value in attrs if self._test(attr)]
             values = [value for attr, value in attrs if self._test(attr)]
             return {
-                "attr":attrbs,
-                "value":values, 
+                "attr": attrbs,
+                "value": values,
             }
-        else :
+        else:
             attrs = dict(attrs)
 
             attrbs = [attr for attr, value in attrs.items() if self._test(attr)]
             values = [value for attr, value in attrs.items() if self._test(attr)]
             return {
-                "attr":attrbs,
-                "value":values, 
+                "attr": attrbs,
+                "value": values,
             }
+
 
 class TagFilter:
     def __init__(
@@ -392,18 +393,15 @@ class TextAndMetadataCleaner:
 
         # Traitement n°2: [all treatments impacting the chr_idx] we removes sub-trees from the HTML + we minify the html
         html_str = htmlmin.minify(html_str, remove_comments=True, keep_pre=True)
-        previous_html_str = ""
-        # We make a while loop because the minification rules are not simple and removing subtrees affects the minification
-        while previous_html_str != html_str:
-            previous_html_str = html_str
-            new_etree = fromstring(html_str)
 
-            self._clean_etree(new_etree)
+        new_etree = fromstring(html_str)
 
-            html_str = etree.tostring(
-                new_etree, method="html", encoding="UTF-8", pretty_print=False
-            ).decode("UTF-8")
-            html_str = htmlmin.minify(html_str, keep_pre=True)
+        self._clean_etree(new_etree)
+
+        html_str = etree.tostring(
+            new_etree, method="html", encoding="UTF-8", pretty_print=False
+        ).decode("UTF-8")
+        html_str = htmlmin.minify(html_str, keep_pre=True)
 
         # Traitement n°3: we separate the text from the list of metadata json that we keep
         self.metadata = []
