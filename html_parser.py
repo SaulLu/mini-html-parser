@@ -354,7 +354,7 @@ class TextAndMetadataCleaner:
         self.consecutive_tag_cleaner = ConsecutiveTagCleaner(
             consecutive_tags_to_fold=consecutive_tags_to_fold
         )
-        consecutive_tag_cleaner_take_tags = []
+
         tags_to_remove_alone = (
             [
                 TagToRemove(FAKE_TAG_BLOCK),
@@ -408,8 +408,7 @@ class TextAndMetadataCleaner:
         # Traitement n°3: we separate the text from the list of metadata json that we keep
         self.metadata = []
         self._current_char_idx = 0
-        self._current_num_metadata_by_start_idx = DefaultDict(lambda: 0)
-        self._current_num_metadata_by_end_idx = DefaultDict(lambda: 0)
+        self._current_num_metadata_by_idx = DefaultDict(lambda: 0)
         self.text = ""
         self.last_tag = None
 
@@ -420,25 +419,30 @@ class TextAndMetadataCleaner:
         return plain_text, self.metadata
 
     def _clean_relative_pos(self, metadata):
-        metadata_dict_start_idx = DefaultDict(dict)
-        metadata_dict_end_idx = DefaultDict(dict)
+        metadata_dict_idx = DefaultDict(dict)
         for metadata_node in metadata:
-            metadata_dict_start_idx[metadata_node.char_start_idx][
+            metadata_dict_idx[metadata_node.char_start_idx][
                 metadata_node.relative_start_pos
-            ] = metadata_node
-            metadata_dict_end_idx[metadata_node.char_end_idx][
+            ] = ("start", metadata_node)
+            metadata_dict_idx[metadata_node.char_end_idx][
                 metadata_node.relative_end_pos
-            ] = metadata_node
+            ] = ("end", metadata_node)
 
-        for key, value in metadata_dict_start_idx.items():
+        for absolute_idx, value in metadata_dict_idx.items():
             pos_sorted = sorted(list(value.keys()))
-            for idx, pos in enumerate(pos_sorted):
-                metadata_dict_start_idx[key][pos].relative_start_pos = idx
+            print("pos_sorted", pos_sorted)
+            idx = 0
+            for pos in pos_sorted:
+                # print("pos ", pos, "metadata_dict_idx[absolute_idx][pos] ", metadata_dict_idx[absolute_idx][pos])
+                if metadata_dict_idx[absolute_idx][pos][0] == "start":
+                    print(metadata_dict_idx[absolute_idx][pos][1].relative_start_pos, idx)
+                    metadata_dict_idx[absolute_idx][pos][1].relative_start_pos = idx
+                    idx += 1
 
-        for key, value in metadata_dict_end_idx.items():
-            pos_sorted = sorted(list(value.keys()))
-            for idx, pos in enumerate(pos_sorted):
-                metadata_dict_end_idx[key][pos].relative_end_pos = idx
+                if metadata_dict_idx[absolute_idx][pos][0] == "end":
+                    print(metadata_dict_idx[absolute_idx][pos][1].relative_end_pos, idx)
+                    metadata_dict_idx[absolute_idx][pos][1].relative_end_pos = idx
+                    idx += 1
 
     def _add_text(self, tag, new_text):
         if tag in BLOCK_ELEMENTS:
@@ -495,14 +499,17 @@ class TextAndMetadataCleaner:
     def _get_text_and_metadata(self, root):
         self.current_tag = root.tag
 
+
         metadata_node = Metadata(
             char_start_idx=self._current_char_idx,
-            relative_start_pos=self._current_num_metadata_by_start_idx[
+            relative_start_pos=self._current_num_metadata_by_idx[
                 self._current_char_idx
             ],
             value=HtmlTag(tag=root.tag, attrs=self.attribute_cleaner(root.attrib)),
         )
-        self._current_num_metadata_by_start_idx[self._current_char_idx] += 1
+        # print(metadata_node.value.tag, metadata_node.relative_start_pos )
+
+        self._current_num_metadata_by_idx[self._current_char_idx] += 1
 
         self._add_text(root.tag, root.text)
         for idx, child in enumerate(root):
@@ -511,10 +518,10 @@ class TextAndMetadataCleaner:
         self.current_tag = root.tag
 
         metadata_node.char_end_idx = self._current_char_idx
-        metadata_node.relative_end_pos = self._current_num_metadata_by_end_idx[
+        metadata_node.relative_end_pos = self._current_num_metadata_by_idx[
             self._current_char_idx
         ]
-        self._current_num_metadata_by_end_idx[self._current_char_idx] += 1
+        self._current_num_metadata_by_idx[self._current_char_idx] += 1
 
         self._add_text(root.tag, root.tail)
 
