@@ -1,13 +1,12 @@
-jsonlines==2.0.0
-tqdm==4.62.2
 pandas==1.0.5
-pytest==6.2.5
 six==1.16.0
+numpy==1.21.1
+pytest==6.2.5
+tqdm==4.62.2
 lxml==4.6.3
 htmlmin==0.1.12
 joblib==1.0.1
-numpy==1.21.1
-beautifulsoup4==4.10.0
+jsonlines==2.0.0
 dask==2021.9.0
 dataclasses==0.8
 matplotlib==3.4.3

@@ -6,8 +6,6 @@ from html.parser import HTMLParser
 from typing import DefaultDict, List, Optional, Tuple
 
 import htmlmin
-import lxml
-from bs4 import BeautifulSoup
 from lxml import etree
 from lxml.html import fromstring
 
