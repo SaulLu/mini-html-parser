@@ -995,7 +995,7 @@ def test_idx_order():
     html = (
         "<html><body>"
         "<h1 id=title>this is a title that we keep</h1>"
-        '<div class="div-level-1" id=1><div class="div-level-2" href="http"><div class="div-level-3"> blablabla tidi <span id=3>tidi2</span></div><span id=2>this one keep his tag</span></div></div>'
+        '<br></br><div class="div-level-1" id=1><div class="div-level-2" href="http"><div class="div-level-3"><br> blablabla tidi <span id=3>tidi2</span></div><span id=2>this one keep his tag</span></div></div>'
         "</body></html>"
     )
     plain_text, metadata = get_clean_text_and_metadata(
@@ -1040,6 +1040,16 @@ def test_idx_order():
             ),
             ("tidi2", {"attr": ["id"], "value": ["3"]}),
         ],
+        "br": [
+            (
+                "",
+                {"attr": [], "value": []},
+            ),
+            (
+                "",
+                {"attr": [], "value": []},
+            )
+        ]
     }
 
     metadata_dict_start_idx = DefaultDict(dict)
@@ -1058,9 +1068,11 @@ def test_idx_order():
             1: ("h1", {"attr": ["id"], "value": ["title"]}),
         },
         29: {
-            0: ("div", {"attr": ["class", "id"], "value": ["div-level-1", "1"]}),
-            1: ("div", {"attr": ["class", "href"], "value": ["div-level-2", "http"]}),
-            2: ("div", {"attr": ["class"], "value": ["div-level-3"]}),
+            0: ("br", {"attr": [], "value": []}),
+            2: ("div", {"attr": ["class", "id"], "value": ["div-level-1", "1"]}),
+            3: ("div", {"attr": ["class", "href"], "value": ["div-level-2", "http"]}),
+            4: ("div", {"attr": ["class"], "value": ["div-level-3"]}),
+            5: ("br", {"attr": [], "value": []}),
         },
         44: {0: ("span", {"attr": ["id"], "value": ["3"]})},
         50: {0: ("span", {"attr": ["id"], "value": ["2"]})},
@@ -1068,6 +1080,10 @@ def test_idx_order():
 
     metadata_sorted_by_end_idx_simplify_true = {
         28: {0: ("h1", {"attr": ["id"], "value": ["title"]})},
+        29: {
+            1: ("br", {"attr": [], "value": []}),
+            6: ("br", {"attr": [], "value": []}),
+        },
         49: {
             0: ("span", {"attr": ["id"], "value": ["3"]}),
             1: ("div", {"attr": ["class"], "value": ["div-level-3"]}),
