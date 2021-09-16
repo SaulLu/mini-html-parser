@@ -3,7 +3,7 @@ import re
 from dataclasses import dataclass
 from html.entities import name2codepoint
 from html.parser import HTMLParser
-from typing import List, Optional, Tuple
+from typing import DefaultDict, List, Optional, Tuple
 
 import htmlmin
 import lxml
@@ -117,8 +117,10 @@ class HtmlTag:
 @dataclass
 class Metadata:
     char_start_idx: int
+    relative_start_pos: int
     value: HtmlTag
     char_end_idx: Optional[int] = None
+    relative_end_pos: Optional[int] = None
     key: str = "html"
     type: str = "local"
 
@@ -406,12 +408,37 @@ class TextAndMetadataCleaner:
         # Traitement n°3: we separate the text from the list of metadata json that we keep
         self.metadata = []
         self._current_char_idx = 0
+        self._current_num_metadata_by_start_idx = DefaultDict(lambda: 0)
+        self._current_num_metadata_by_end_idx = DefaultDict(lambda: 0)
         self.text = ""
         self.last_tag = None
 
         plain_text = self._get_text_and_metadata(new_etree)
 
+        self._clean_relative_pos(self.metadata)
+
         return plain_text, self.metadata
+
+    def _clean_relative_pos(self, metadata):
+        metadata_dict_start_idx = DefaultDict(dict)
+        metadata_dict_end_idx = DefaultDict(dict)
+        for metadata_node in metadata:
+            metadata_dict_start_idx[metadata_node.char_start_idx][
+                metadata_node.relative_start_pos
+            ] = metadata_node
+            metadata_dict_end_idx[metadata_node.char_end_idx][
+                metadata_node.relative_end_pos
+            ] = metadata_node
+
+        for key, value in metadata_dict_start_idx.items():
+            pos_sorted = sorted(list(value.keys()))
+            for idx, pos in enumerate(pos_sorted):
+                metadata_dict_start_idx[key][pos].relative_start_pos = idx
+
+        for key, value in metadata_dict_end_idx.items():
+            pos_sorted = sorted(list(value.keys()))
+            for idx, pos in enumerate(pos_sorted):
+                metadata_dict_end_idx[key][pos].relative_end_pos = idx
 
     def _add_text(self, tag, new_text):
         if tag in BLOCK_ELEMENTS:
@@ -470,8 +497,12 @@ class TextAndMetadataCleaner:
 
         metadata_node = Metadata(
             char_start_idx=self._current_char_idx,
+            relative_start_pos=self._current_num_metadata_by_start_idx[
+                self._current_char_idx
+            ],
             value=HtmlTag(tag=root.tag, attrs=self.attribute_cleaner(root.attrib)),
         )
+        self._current_num_metadata_by_start_idx[self._current_char_idx] += 1
 
         self._add_text(root.tag, root.text)
         for idx, child in enumerate(root):
@@ -479,9 +510,11 @@ class TextAndMetadataCleaner:
 
         self.current_tag = root.tag
 
-        char_end_idx = self._current_char_idx
-
-        metadata_node.char_end_idx = char_end_idx
+        metadata_node.char_end_idx = self._current_char_idx
+        metadata_node.relative_end_pos = self._current_num_metadata_by_end_idx[
+            self._current_char_idx
+        ]
+        self._current_num_metadata_by_end_idx[self._current_char_idx] += 1
 
         self._add_text(root.tag, root.tail)
 
