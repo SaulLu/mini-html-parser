@@ -3,19 +3,10 @@ import dataclasses
 import gzip
 import json
 import os
-import pprint
 import sys
-from collections import defaultdict
-from html.parser import HTMLParser
 
-import htmlmin
 import jsonlines
-import numpy as np
-import pandas as pd
-import six
 from joblib import Parallel, delayed
-from lxml import etree
-from lxml.html import fromstring
 from tqdm import tqdm
 
 sys.path.append(".")  # It's not very nice, we need to create a module
