@@ -14,9 +14,9 @@ from html_parser import (TagToRemove, TagToRemoveWithContent,
                          get_clean_text_and_metadata)
 
 
-def process_file(file_name):
+def process_file(file_name, split="train"):
     print(f"Start process {file_name}")
-    file_path = os.path.join(data_dir, "train", file_name)
+    file_path = os.path.join(data_dir, split, file_name)
     target_dir = os.path.join(data_dir, "SaulLu/Natural_Questions_HTML_Toy_V2")
     print(f"Results will be saved into {target_dir}")
 
@@ -111,8 +111,17 @@ if __name__ == "__main__":
     NUM_CORES = int(args.num_cores)
     data_dir = args.data_dir
 
-    list_dir = os.listdir(os.path.join(data_dir, "train"))
+
+    split = "train"
+    list_dir = os.listdir(os.path.join(data_dir, split))
     list_dir = [f.lower() for f in list_dir]
     results = Parallel(n_jobs=NUM_CORES)(
-        delayed(process_file)(file_name) for file_name in sorted(list_dir)
+        delayed(process_file)(file_name, split) for file_name in sorted(list_dir)
+    )
+
+    split = "dev"
+    list_dir = os.listdir(os.path.join(data_dir, split))
+    list_dir = [f.lower() for f in list_dir]
+    results = Parallel(n_jobs=NUM_CORES)(
+        delayed(process_file)(file_name, split) for file_name in sorted(list_dir)
     )
