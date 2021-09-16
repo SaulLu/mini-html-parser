@@ -428,17 +428,13 @@ class TextAndMetadataCleaner:
 
         for absolute_idx, value in metadata_dict_idx.items():
             pos_sorted = sorted(list(value.keys()))
-            print("pos_sorted", pos_sorted)
             idx = 0
             for pos in pos_sorted:
-                # print("pos ", pos, "metadata_dict_idx[absolute_idx][pos] ", metadata_dict_idx[absolute_idx][pos])
                 if metadata_dict_idx[absolute_idx][pos][0] == "start":
-                    print(metadata_dict_idx[absolute_idx][pos][1].relative_start_pos, idx)
                     metadata_dict_idx[absolute_idx][pos][1].relative_start_pos = idx
                     idx += 1
 
                 if metadata_dict_idx[absolute_idx][pos][0] == "end":
-                    print(metadata_dict_idx[absolute_idx][pos][1].relative_end_pos, idx)
                     metadata_dict_idx[absolute_idx][pos][1].relative_end_pos = idx
                     idx += 1
 
@@ -505,7 +501,6 @@ class TextAndMetadataCleaner:
             ],
             value=HtmlTag(tag=root.tag, attrs=self.attribute_cleaner(root.attrib)),
         )
-        # print(metadata_node.value.tag, metadata_node.relative_start_pos )
 
         self._current_num_metadata_by_idx[self._current_char_idx] += 1
 
