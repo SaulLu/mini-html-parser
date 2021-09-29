@@ -243,7 +243,6 @@ class TagFilter:
                 and content_char_length >= self.txt_min_chr_len_with_content
             ):
                 drop_tag = True
-                print(tag, text)
         return drop_tag
 
     def drop_tag_and_content_bottom_up(self, tag: str, text: str):
