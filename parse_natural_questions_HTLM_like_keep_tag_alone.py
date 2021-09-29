@@ -2,11 +2,9 @@ import dataclasses
 import gzip
 import json
 import os
-import pprint
 from collections import defaultdict
 from html.parser import HTMLParser
 
-import htmlmin
 import jsonlines
 import numpy as np
 import pandas as pd
@@ -16,7 +14,8 @@ from lxml import etree
 from lxml.html import fromstring
 from tqdm import tqdm
 
-from html_parser import TagToRemoveWithContent, TagToRemove, get_clean_text_and_metadata
+from html_parser import (TagToRemove, TagToRemoveWithContent,
+                         get_clean_text_and_metadata)
 
 
 def process_file(file_name):

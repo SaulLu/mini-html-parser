@@ -3,11 +3,9 @@ import re
 from dataclasses import dataclass
 from html.entities import name2codepoint
 from html.parser import HTMLParser
-from typing import List, Optional, Tuple
+from typing import DefaultDict, List, Optional, Tuple
 
 import htmlmin
-import lxml
-from bs4 import BeautifulSoup
 from lxml import etree
 from lxml.html import fromstring
 
@@ -117,8 +115,10 @@ class HtmlTag:
 @dataclass
 class Metadata:
     char_start_idx: int
+    relative_start_pos: int
     value: HtmlTag
     char_end_idx: Optional[int] = None
+    relative_end_pos: Optional[int] = None
     key: str = "html"
     type: str = "local"
 
@@ -135,8 +135,8 @@ class AttributeCleaner:
             attrbs = [attr for attr, value in attrs if self._test(attr)]
             values = [value for attr, value in attrs if self._test(attr)]
             return {
-                "attr": attrbs,
-                "value": values,
+                "attrs": attrbs,
+                "values": values,
             }
         else:
             attrs = dict(attrs)
@@ -144,8 +144,8 @@ class AttributeCleaner:
             attrbs = [attr for attr, value in attrs.items() if self._test(attr)]
             values = [value for attr, value in attrs.items() if self._test(attr)]
             return {
-                "attr": attrbs,
-                "value": values,
+                "attrs": attrbs,
+                "values": values,
             }
 
 
@@ -154,7 +154,20 @@ class TagFilter:
         self,
         tags_to_remove_alone: Optional[List[TagToRemove]],
         tags_to_remove_with_content: Optional[List[TagToRemoveWithContent]],
+        txt_max_chr_len_alone: Optional[float] = -float("inf"),
+        txt_min_chr_len_alone: Optional[float] = -float("inf"),
+        tags_exceptions_alone: Optional[List[str]] = None,
+        txt_max_chr_len_with_content: Optional[float] = -float("inf"),
+        txt_min_chr_len_with_content: Optional[float] = -float("inf"),
+        tags_exceptions_with_content: Optional[List[str]] = None,
     ):
+        self.txt_max_chr_len_alone = txt_max_chr_len_alone
+        self.txt_min_chr_len_alone = txt_min_chr_len_alone
+        self.tags_exceptions_alone = tags_exceptions_alone if tags_exceptions_alone is not None else []
+        self.txt_max_chr_len_with_content = txt_max_chr_len_with_content
+        self.txt_min_chr_len_with_content = txt_min_chr_len_with_content
+        self.tags_exceptions_with_content = tags_exceptions_with_content if tags_exceptions_with_content is not None else []
+
         self.tags_to_remove_alone = (
             {tag_to_remove.tag: tag_to_remove for tag_to_remove in tags_to_remove_alone}
             if isinstance(tags_to_remove_alone, list)
@@ -181,41 +194,57 @@ class TagFilter:
 
     def drop_tag(self, metadata_node):
         tag = str(metadata_node.value.tag)
-        if tag not in self.tags_to_remove_alone:
-            return False
 
-        tag_to_remove_characteristics = self.tags_to_remove_alone[tag]
+        drop_tag = False
         content_char_length = (
             metadata_node.char_end_idx - metadata_node.char_start_idx
             if metadata_node.char_end_idx is not None
             else 0
         )
+
         if (
-            content_char_length <= tag_to_remove_characteristics.content_max_char_length
-            and content_char_length
-            >= tag_to_remove_characteristics.content_min_char_length
+            tag in self.tags_to_remove_alone
+            and content_char_length <= self.tags_to_remove_alone[tag].content_max_char_length
+            and content_char_length >= self.tags_to_remove_alone[tag].content_min_char_length
         ):
-            return True
+            drop_tag = True
+
+        if tag not in self.tags_exceptions_alone:
+            if (
+                content_char_length <= self.txt_max_chr_len_alone
+                and content_char_length >= self.txt_min_chr_len_alone
+            ):
+                drop_tag = True
+
         # raise TypeError(f"tag need to be a string not a {type(tag)}")
-        return False
+        return drop_tag
 
     def drop_tag_and_content_top_down(self, tag: str, text: str):
-        if tag not in self.tags_to_remove_with_content:
+        if (
+            tag in self.tags_to_remove_with_content
+            and self.tags_to_remove_with_content[tag].method != "top-down"
+        ):
             return False
 
-        tag_to_remove_characteristics = self.tags_to_remove_with_content[tag]
-        if tag_to_remove_characteristics.method != "top-down":
-            return False
-
+        drop_tag = False
         content_char_length = len(text)
         if (
-            content_char_length <= tag_to_remove_characteristics.content_max_char_length
+            tag in self.tags_to_remove_with_content
             and content_char_length
-            >= tag_to_remove_characteristics.content_min_char_length
+            <= self.tags_to_remove_with_content[tag].content_max_char_length
+            and content_char_length
+            >= self.tags_to_remove_with_content[tag].content_min_char_length
         ):
-            return True
-
-        return False
+            drop_tag = True
+        
+        if tag not in self.tags_exceptions_with_content:
+            if (
+                content_char_length <= self.txt_max_chr_len_with_content
+                and content_char_length >= self.txt_min_chr_len_with_content
+            ):
+                drop_tag = True
+                print(tag, text)
+        return drop_tag
 
     def drop_tag_and_content_bottom_up(self, tag: str, text: str):
         if tag not in self.tags_to_remove_with_content:
@@ -239,6 +268,7 @@ class TagFilter:
 class ConsecutiveTagCleaner:
     def __init__(
         self,
+        block_elements: list,
         consecutive_tags_to_fold: Optional[List[str]],
     ):
         self.consecutive_tags_to_fold = (
@@ -250,6 +280,7 @@ class ConsecutiveTagCleaner:
         self.fake_tag_inline = FAKE_TAG_INLINE
         self.fake_tag_basic = FAKE_TAG_BASIC
         self.attrib_separator = " "
+        self.block_elements = block_elements
 
     def __call__(self, root):
         tag = root.tag
@@ -264,7 +295,7 @@ class ConsecutiveTagCleaner:
             and root[0].tag == root.attrib["previous_tag"]
         ):  # has 1 child
 
-            if tag in BLOCK_ELEMENTS:
+            if tag in self.block_elements:
                 root[0].tag = self.fake_tag_block
             elif tag in INLINE_ELEMENTS_SPACING:
                 root[0].tag = self.fake_tag_inline
@@ -342,34 +373,55 @@ class TextAndMetadataCleaner:
         attrs_to_keep: Optional[List[str]] = None,
         start_parsing_at_tag: Optional[str] = "body",
         consecutive_tags_to_fold: Optional[List[str]] = None,
+        convert_br_tag_to_breaking_line: Optional[bool] = False,
+        txt_max_chr_len_alone: float = -float("inf"),
+        txt_min_chr_len_alone: float = -float("inf"),
+        tags_exceptions_to_txt_max_min_chr_len_alone: List[str] = None,
+        txt_max_chr_len_with_content: float = -float("inf"),
+        txt_min_chr_len_with_content: float = -float("inf"),
+        tags_exceptions_to_txt_max_min_chr_len_with_content: List[str] = None,
     ):
         self.html_str = html_str
         self.tags_to_remove_with_content = tags_to_remove_with_content
         self.tags_to_remove_alone = tags_to_remove_alone
         self.attrs_to_keep = attrs_to_keep
         self.start_parsing_at_tag = start_parsing_at_tag
+        self.convert_br_tag_to_breaking_line = convert_br_tag_to_breaking_line
 
-        self.consecutive_tag_cleaner = ConsecutiveTagCleaner(
-            consecutive_tags_to_fold=consecutive_tags_to_fold
-        )
-        consecutive_tag_cleaner_take_tags = []
-        tags_to_remove_alone = (
+        self.tags_to_remove_alone = (
             [
                 TagToRemove(FAKE_TAG_BLOCK),
                 TagToRemove(FAKE_TAG_INLINE),
                 TagToRemove(FAKE_TAG_BASIC),
             ]
-            if tags_to_remove_alone is None
-            else tags_to_remove_alone
+            if self.tags_to_remove_alone is None
+            else self.tags_to_remove_alone
             + [
                 TagToRemove(FAKE_TAG_BLOCK),
                 TagToRemove(FAKE_TAG_INLINE),
                 TagToRemove(FAKE_TAG_BASIC),
             ]
         )
+
+        self.block_elements = BLOCK_ELEMENTS.copy()
+        if self.convert_br_tag_to_breaking_line:
+            self.block_elements.remove("br")
+            self.tags_to_remove_alone.append(TagToRemove("br"))
+
+        self.consecutive_tag_cleaner = ConsecutiveTagCleaner(
+            block_elements=self.block_elements,
+            consecutive_tags_to_fold=consecutive_tags_to_fold,
+        )
+
         self.attribute_cleaner = AttributeCleaner(attrs_to_keep=attrs_to_keep)
         self.tag_filter = TagFilter(
-            tags_to_remove_alone=tags_to_remove_alone,
+            txt_max_chr_len_alone=txt_max_chr_len_alone,
+            txt_min_chr_len_alone=txt_min_chr_len_alone,
+            tags_exceptions_alone=tags_exceptions_to_txt_max_min_chr_len_alone,
+            txt_max_chr_len_with_content=txt_max_chr_len_with_content,
+            txt_min_chr_len_with_content=txt_min_chr_len_with_content,
+            tags_exceptions_with_content=tags_exceptions_to_txt_max_min_chr_len_with_content,
+            tags_to_remove_alone=self.tags_to_remove_alone,
             tags_to_remove_with_content=tags_to_remove_with_content,
         )
 
@@ -406,15 +458,44 @@ class TextAndMetadataCleaner:
         # Traitement n°3: we separate the text from the list of metadata json that we keep
         self.metadata = []
         self._current_char_idx = 0
+        self._current_num_metadata_by_idx = DefaultDict(lambda: 0)
         self.text = ""
         self.last_tag = None
 
         plain_text = self._get_text_and_metadata(new_etree)
 
+        self._clean_relative_pos(self.metadata)
+
         return plain_text, self.metadata
 
+    def _br_conversion(self, tag):
+        if tag == "br":
+            self.text += "\n"
+
+    def _clean_relative_pos(self, metadata):
+        metadata_dict_idx = DefaultDict(dict)
+        for metadata_node in metadata:
+            metadata_dict_idx[metadata_node.char_start_idx][
+                metadata_node.relative_start_pos
+            ] = ("start", metadata_node)
+            metadata_dict_idx[metadata_node.char_end_idx][
+                metadata_node.relative_end_pos
+            ] = ("end", metadata_node)
+
+        for absolute_idx, value in metadata_dict_idx.items():
+            pos_sorted = sorted(list(value.keys()))
+            idx = 0
+            for pos in pos_sorted:
+                if metadata_dict_idx[absolute_idx][pos][0] == "start":
+                    metadata_dict_idx[absolute_idx][pos][1].relative_start_pos = idx
+                    idx += 1
+
+                if metadata_dict_idx[absolute_idx][pos][0] == "end":
+                    metadata_dict_idx[absolute_idx][pos][1].relative_end_pos = idx
+                    idx += 1
+
     def _add_text(self, tag, new_text):
-        if tag in BLOCK_ELEMENTS:
+        if tag in self.block_elements:
             self.text = self._append_block_separator(self.text)
         elif tag in INLINE_ELEMENTS_SPACING:
             self.text = self._append_inline_element_separator(self.text)
@@ -470,8 +551,16 @@ class TextAndMetadataCleaner:
 
         metadata_node = Metadata(
             char_start_idx=self._current_char_idx,
+            relative_start_pos=self._current_num_metadata_by_idx[
+                self._current_char_idx
+            ],
             value=HtmlTag(tag=root.tag, attrs=self.attribute_cleaner(root.attrib)),
         )
+
+        self._current_num_metadata_by_idx[self._current_char_idx] += 1
+
+        if self.convert_br_tag_to_breaking_line:
+            self._br_conversion(root.tag)
 
         self._add_text(root.tag, root.text)
         for idx, child in enumerate(root):
@@ -479,9 +568,11 @@ class TextAndMetadataCleaner:
 
         self.current_tag = root.tag
 
-        char_end_idx = self._current_char_idx
-
-        metadata_node.char_end_idx = char_end_idx
+        metadata_node.char_end_idx = self._current_char_idx
+        metadata_node.relative_end_pos = self._current_num_metadata_by_idx[
+            self._current_char_idx
+        ]
+        self._current_num_metadata_by_idx[self._current_char_idx] += 1
 
         self._add_text(root.tag, root.tail)
 
@@ -523,6 +614,13 @@ def get_clean_text_and_metadata(
     tags_to_remove_alone: Optional[List[str]] = None,
     attrs_to_keep: Optional[List[str]] = None,
     consecutive_tags_to_fold: Optional[List[str]] = None,
+    convert_br_tag_to_breaking_line: Optional[bool] = False,
+    txt_max_chr_len_alone: float = -float("inf"),
+    txt_min_chr_len_alone: float = -float("inf"),
+    tags_exceptions_to_txt_max_min_chr_len_alone: List[str] = None,
+    txt_max_chr_len_with_content: float = -float("inf"),
+    txt_min_chr_len_with_content: float = -float("inf"),
+    tags_exceptions_to_txt_max_min_chr_len_with_content: List[str] = None,
 ):
     text_and_metadata_cleaner = TextAndMetadataCleaner(
         html_str=html_str,
@@ -531,5 +629,12 @@ def get_clean_text_and_metadata(
         attrs_to_keep=attrs_to_keep,
         start_parsing_at_tag="body",
         consecutive_tags_to_fold=consecutive_tags_to_fold,
+        convert_br_tag_to_breaking_line=convert_br_tag_to_breaking_line,
+        txt_max_chr_len_alone=txt_max_chr_len_alone,
+        txt_min_chr_len_alone=txt_min_chr_len_alone,
+        tags_exceptions_to_txt_max_min_chr_len_alone=tags_exceptions_to_txt_max_min_chr_len_alone,
+        txt_max_chr_len_with_content=txt_max_chr_len_with_content,
+        txt_min_chr_len_with_content=txt_min_chr_len_with_content,
+        tags_exceptions_to_txt_max_min_chr_len_with_content=tags_exceptions_to_txt_max_min_chr_len_with_content,
     )
     return text_and_metadata_cleaner.apply()
