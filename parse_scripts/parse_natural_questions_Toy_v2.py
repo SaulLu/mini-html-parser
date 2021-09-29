@@ -4,14 +4,101 @@ import gzip
 import json
 import os
 import sys
+from typing import OrderedDict
 
 import jsonlines
 from joblib import Parallel, delayed
 from tqdm import tqdm
 
 sys.path.append(".")  # It's not very nice, we need to create a module
-from html_parser import (TagToRemove, TagToRemoveWithContent,
-                         get_clean_text_and_metadata)
+from html_parser import (
+    TagToRemove,
+    TagToRemoveWithContent,
+    get_clean_text_and_metadata,
+    Metadata,
+)
+
+
+def convert_html_metadata_dataclass_to_dict(metadata: Metadata):
+    html_metadata_dict = OrderedDict(
+        {
+            "key": metadata.key,
+            "type": metadata.type,
+            "char_start_idx": metadata.char_start_idx,
+            "relative_start_pos": metadata.relative_start_pos,
+            "char_end_idx": metadata.char_end_idx,
+            "relative_end_pos": metadata.relative_end_pos,
+            # The information about the HTML tag is separated into two keys because the dictionary must have a stable
+            # format between the different types of metadata
+            "value": metadata.value.tag,
+            "html_attrs": metadata.value.attrs,
+        }
+    )
+    return html_metadata_dict
+
+
+def process_example(doc_html):  # %%
+    forms_tags = [
+        # "button",
+        # "datalist",
+        # "fieldset",
+        "form",
+        # "input",
+        # "label",
+        # "legend",
+        # "meter",
+        # "optgroup",
+        # "option",
+        # "output",
+        # "progress",
+        # "select",
+        # "textarea"
+    ]
+    tags_to_remove_with_content = [
+        TagToRemoveWithContent(tag="script"),
+        TagToRemoveWithContent(tag="style"),
+        TagToRemoveWithContent(tag="header"),
+        TagToRemoveWithContent(tag="iframe"),
+        TagToRemoveWithContent(tag="footer"),  # copyright in footer
+        *[TagToRemoveWithContent(tag=forms_tag) for forms_tag in forms_tags],
+    ]
+    # tags_to_remove_alone_standard_textual = [
+    #     "div",
+    #     "p",
+    #     "h1",
+    #     "h2",
+    #     "h3",
+    #     "h4",
+    #     "h5",
+    #     "h6",
+    #     "title",
+    #     "blockquote"
+    #                 ]
+    # tags_to_remove_alone_specific = [
+    #     "table",
+    #     "span",
+    #     "li",
+    #     "ol",
+    #     "menu",
+    # ]
+    tags_to_remove_alone = [
+        # *[TagToRemove(tag=tag, content_max_char_length=128) for tag in tags_to_remove_alone_standard_textual],
+        # *[TagToRemove(tag=tag, content_max_char_length=64) for tag in tags_to_remove_alone_specific],
+    ]
+    plain_text, metadata = get_clean_text_and_metadata(
+        doc_html,
+        tags_to_remove_with_content=tags_to_remove_with_content,
+        tags_to_remove_alone=tags_to_remove_alone,
+        # attrs_to_keep=["class", "id"],
+        consecutive_tags_to_fold=["div"],
+    )
+    json_example = {
+        "text": plain_text,
+        "metadata": [
+            convert_html_metadata_dataclass_to_dict(node) for node in metadata
+        ],
+    }
+    return json_example
 
 
 def process_file(file_name, split="train"):
@@ -30,71 +117,9 @@ def process_file(file_name, split="train"):
             writer = jsonlines.Writer(fi_target)
             for compt, line in tqdm(enumerate(fi_init)):
                 json_example = json.loads(line)
-                doc_html = json_example["document_html"]  # %%
-                forms_tags = [
-                    # "button",
-                    # "datalist",
-                    # "fieldset",
-                    "form",
-                    # "input",
-                    # "label",
-                    # "legend",
-                    # "meter",
-                    # "optgroup",
-                    # "option",
-                    # "output",
-                    # "progress",
-                    # "select",
-                    # "textarea"
-                ]
-                tags_to_remove_with_content = [
-                    TagToRemoveWithContent(tag="script"),
-                    TagToRemoveWithContent(tag="style"),
-                    TagToRemoveWithContent(tag="header"),
-                    TagToRemoveWithContent(tag="iframe"),
-                    TagToRemoveWithContent(tag="footer"),  # copyright in footer
-                    *[
-                        TagToRemoveWithContent(tag=forms_tag)
-                        for forms_tag in forms_tags
-                    ],
-                ]
-                # tags_to_remove_alone_standard_textual = [
-                #     "div",
-                #     "p",
-                #     "h1",
-                #     "h2",
-                #     "h3",
-                #     "h4",
-                #     "h5",
-                #     "h6",
-                #     "title",
-                #     "blockquote"
-                #                 ]
-                # tags_to_remove_alone_specific = [
-                #     "table",
-                #     "span",
-                #     "li",
-                #     "ol",
-                #     "menu",
-                # ]
-                tags_to_remove_alone = [
-                    # *[TagToRemove(tag=tag, content_max_char_length=128) for tag in tags_to_remove_alone_standard_textual],
-                    # *[TagToRemove(tag=tag, content_max_char_length=64) for tag in tags_to_remove_alone_specific],
-                ]
-                plain_text, metadata = get_clean_text_and_metadata(
-                    doc_html,
-                    tags_to_remove_with_content=tags_to_remove_with_content,
-                    tags_to_remove_alone=tags_to_remove_alone,
-                    # attrs_to_keep=["class", "id"],
-                    consecutive_tags_to_fold=["div"],
-                )
-                json_example = {
-                    "text": plain_text,
-                    "metadata": [dataclasses.asdict(node) for node in metadata],
-                }
+                doc_html = json_example["document_html"]
+                json_example = process_example(doc_html)
                 writer.write(json_example)
-                if compt > 2:
-                    break
     print(f"End process {file_name}")
 
 
@@ -110,7 +135,6 @@ if __name__ == "__main__":
 
     NUM_CORES = int(args.num_cores)
     data_dir = args.data_dir
-
 
     split = "train"
     list_dir = os.listdir(os.path.join(data_dir, split))
