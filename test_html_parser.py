@@ -3,8 +3,7 @@ from typing import DefaultDict
 
 import pytest
 
-from html_parser import (TagToRemove, TagToRemoveWithContent,
-                         get_clean_text_and_metadata)
+from html_parser import TagToRemove, TagToRemoveWithContent, get_clean_text_and_metadata
 
 
 def check_content_parsing(
@@ -598,7 +597,7 @@ def test_behavior_on_corrupt_examples():
         metadata=metadata,
         plain_text=plain_text,
     )
-    assert metadata[0].value.attrs == {"attr": [], "value": []}
+    assert metadata[0].value.attrs == {"attrs": [], "values": []}
 
     # Corrupt 2: unnecessary "
     html = """<a href="http://example.com""> test </a>"""
@@ -623,8 +622,8 @@ def test_behavior_on_corrupt_examples():
         plain_text=plain_text,
     )
     assert metadata[0].value.attrs == {
-        "attr": ["href"],
-        "value": ["http://example.com"],
+        "attrs": ["href"],
+        "values": ["http://example.com"],
     }
 
 
@@ -648,13 +647,13 @@ def test_attribs():
         "body": [
             (
                 "this is a title that we keep\n" "blablabla\n" "tidi tidi\n",
-                {"attr": [], "value": []},
+                {"attrs": [], "values": []},
             )
         ],
-        "h1": [("this is a title that we keep", {"attr": [], "value": []})],
+        "h1": [("this is a title that we keep", {"attrs": [], "values": []})],
         "div": [
-            ("blablabla\ntidi tidi\n", {"attr": ["class"], "value": ["div-level-1"]}),
-            ("\ntidi tidi", {"attr": ["class"], "value": ["div-level-2"]}),
+            ("blablabla\ntidi tidi\n", {"attrs": ["class"], "values": ["div-level-1"]}),
+            ("\ntidi tidi", {"attrs": ["class"], "values": ["div-level-2"]}),
         ],
     }
 
@@ -687,16 +686,16 @@ def test_remove_consecutive_tag():
         "body": [
             (
                 "this is a title that we keep\n" "blablabla\n" "tidi tidi\n",
-                {"attr": [], "value": []},
+                {"attrs": [], "values": []},
             )
         ],
-        "h1": [("this is a title that we keep", {"attr": [], "value": []})],
+        "h1": [("this is a title that we keep", {"attrs": [], "values": []})],
         "div": [
             (
                 "blablabla\ntidi tidi\n",
                 {
-                    "attr": ["class", "id", "href"],
-                    "value": ["div-level-1 div-level-2", "1", "http"],
+                    "attrs": ["class", "id", "href"],
+                    "values": ["div-level-1 div-level-2", "1", "http"],
                 },
             ),
         ],
@@ -734,16 +733,18 @@ def test_remove_consecutive_tag_with_tag_to_remove():
         "body": [
             (
                 "this is a title that we keep\n" "blablabla\n" "tidi tidi\n",
-                {"attr": [], "value": []},
+                {"attrs": [], "values": []},
             )
         ],
-        "h1": [("this is a title that we keep", {"attr": ["id"], "value": ["title"]})],
+        "h1": [
+            ("this is a title that we keep", {"attrs": ["id"], "values": ["title"]})
+        ],
         "div": [
             (
                 "blablabla\ntidi tidi\n",
                 {
-                    "attr": ["class", "id", "href"],
-                    "value": ["div-level-1 div-level-2", "1", "http"],
+                    "attrs": ["class", "id", "href"],
+                    "values": ["div-level-1 div-level-2", "1", "http"],
                 },
             ),
         ],
@@ -783,16 +784,18 @@ def test_remove_consecutive_tag_very_nested():
         "body": [
             (
                 "this is a title that we keep\n" "blablabla\n" "tidi\ntidi2\n",
-                {"attr": [], "value": []},
+                {"attrs": [], "values": []},
             )
         ],
-        "h1": [("this is a title that we keep", {"attr": ["id"], "value": ["title"]})],
+        "h1": [
+            ("this is a title that we keep", {"attrs": ["id"], "values": ["title"]})
+        ],
         "div": [
             (
                 "blablabla\ntidi\ntidi2\n",
                 {
-                    "attr": ["class", "id", "href"],
-                    "value": ["div-level-1 div-level-2", "1 3", "http"],
+                    "attrs": ["class", "id", "href"],
+                    "values": ["div-level-1 div-level-2", "1 3", "http"],
                 },
             ),
         ],
@@ -836,20 +839,22 @@ def test_min_len_to_include_tag():
                 "this is a title that we keep\n"
                 "blablabla\n"
                 "tidi tidi2 this one keep his tag\n",
-                {"attr": [], "value": []},
+                {"attrs": [], "values": []},
             )
         ],
-        "h1": [("this is a title that we keep", {"attr": ["id"], "value": ["title"]})],
+        "h1": [
+            ("this is a title that we keep", {"attrs": ["id"], "values": ["title"]})
+        ],
         "div": [
             (
                 "blablabla\ntidi tidi2 this one keep his tag\n",
                 {
-                    "attr": ["class", "id", "href"],
-                    "value": ["div-level-1 div-level-2", "1", "http"],
+                    "attrs": ["class", "id", "href"],
+                    "values": ["div-level-1 div-level-2", "1", "http"],
                 },
             ),
         ],
-        "span": [("this one keep his tag", {"attr": ["id"], "value": ["3"]})],
+        "span": [("this one keep his tag", {"attrs": ["id"], "values": ["3"]})],
     }
 
     check_content_parsing_and_metadata(
@@ -879,35 +884,35 @@ def test_idx_order():
                 "this is a title that we keep\n"
                 "blablabla tidi tidi2\n"
                 "this one keep his tag\n",
-                {"attr": [], "value": []},
+                {"attrs": [], "values": []},
             )
         ],
         "h1": [
             (
                 "this is a title that we keep",
-                {"attr": ["id"], "value": ["title"]},
+                {"attrs": ["id"], "values": ["title"]},
             )
         ],
         "div": [
             (
                 "blablabla tidi tidi2\nthis one keep his tag",
-                {"attr": ["class", "href"], "value": ["div-level-2", "http"]},
+                {"attrs": ["class", "href"], "values": ["div-level-2", "http"]},
             ),
             (
                 "blablabla tidi tidi2",
-                {"attr": ["class"], "value": ["div-level-3"]},
+                {"attrs": ["class"], "values": ["div-level-3"]},
             ),
             (
                 "blablabla tidi tidi2\nthis one keep his tag\n",
-                {"attr": ["class", "id"], "value": ["div-level-1", "1"]},
+                {"attrs": ["class", "id"], "values": ["div-level-1", "1"]},
             ),
         ],
         "span": [
             (
                 "this one keep his tag",
-                {"attr": ["id"], "value": ["2"]},
+                {"attrs": ["id"], "values": ["2"]},
             ),
-            ("tidi2", {"attr": ["id"], "value": ["3"]}),
+            ("tidi2", {"attrs": ["id"], "values": ["3"]}),
         ],
     }
     metadata_sorted_by_start_idx = DefaultDict(list)
@@ -947,31 +952,31 @@ def test_idx_order():
 
     metadata_sorted_by_start_idx_simplify_true = {
         0: [
-            ("body", {"attr": [], "value": []}),
-            ("h1", {"attr": ["id"], "value": ["title"]}),
+            ("body", {"attrs": [], "values": []}),
+            ("h1", {"attrs": ["id"], "values": ["title"]}),
         ],
         29: [
-            ("div", {"attr": ["class", "id"], "value": ["div-level-1", "1"]}),
-            ("div", {"attr": ["class", "href"], "value": ["div-level-2", "http"]}),
-            ("div", {"attr": ["class"], "value": ["div-level-3"]}),
+            ("div", {"attrs": ["class", "id"], "values": ["div-level-1", "1"]}),
+            ("div", {"attrs": ["class", "href"], "values": ["div-level-2", "http"]}),
+            ("div", {"attrs": ["class"], "values": ["div-level-3"]}),
         ],
-        44: [("span", {"attr": ["id"], "value": ["3"]})],
-        50: [("span", {"attr": ["id"], "value": ["2"]})],
+        44: [("span", {"attrs": ["id"], "values": ["3"]})],
+        50: [("span", {"attrs": ["id"], "values": ["2"]})],
     }
 
     metadata_sorted_by_end_idx_simplify_true = {
-        28: [("h1", {"attr": ["id"], "value": ["title"]})],
+        28: [("h1", {"attrs": ["id"], "values": ["title"]})],
         49: [
-            ("span", {"attr": ["id"], "value": ["3"]}),
-            ("div", {"attr": ["class"], "value": ["div-level-3"]}),
+            ("span", {"attrs": ["id"], "values": ["3"]}),
+            ("div", {"attrs": ["class"], "values": ["div-level-3"]}),
         ],
         71: [
-            ("span", {"attr": ["id"], "value": ["2"]}),
-            ("div", {"attr": ["class", "href"], "value": ["div-level-2", "http"]}),
+            ("span", {"attrs": ["id"], "values": ["2"]}),
+            ("div", {"attrs": ["class", "href"], "values": ["div-level-2", "http"]}),
         ],
         72: [
-            ("div", {"attr": ["class", "id"], "value": ["div-level-1", "1"]}),
-            ("body", {"attr": [], "value": []}),
+            ("div", {"attrs": ["class", "id"], "values": ["div-level-1", "1"]}),
+            ("body", {"attrs": [], "values": []}),
         ],
     }
 
@@ -1010,46 +1015,46 @@ def test_idx_order():
                 "this is a title that we keep\n"
                 "blablabla tidi tidi2\n"
                 "this one keep his tag\n",
-                {"attr": [], "value": []},
+                {"attrs": [], "values": []},
             )
         ],
         "h1": [
             (
                 "this is a title that we keep",
-                {"attr": ["id"], "value": ["title"]},
+                {"attrs": ["id"], "values": ["title"]},
             )
         ],
         "div": [
             (
                 "blablabla tidi tidi2\nthis one keep his tag",
-                {"attr": ["class", "href"], "value": ["div-level-2", "http"]},
+                {"attrs": ["class", "href"], "values": ["div-level-2", "http"]},
             ),
             (
                 "blablabla tidi tidi2",
-                {"attr": ["class"], "value": ["div-level-3"]},
+                {"attrs": ["class"], "values": ["div-level-3"]},
             ),
             (
                 "blablabla tidi tidi2\nthis one keep his tag\n",
-                {"attr": ["class", "id"], "value": ["div-level-1", "1"]},
+                {"attrs": ["class", "id"], "values": ["div-level-1", "1"]},
             ),
         ],
         "span": [
             (
                 "this one keep his tag",
-                {"attr": ["id"], "value": ["2"]},
+                {"attrs": ["id"], "values": ["2"]},
             ),
-            ("tidi2", {"attr": ["id"], "value": ["3"]}),
+            ("tidi2", {"attrs": ["id"], "values": ["3"]}),
         ],
         "br": [
             (
                 "",
-                {"attr": [], "value": []},
+                {"attrs": [], "values": []},
             ),
             (
                 "",
-                {"attr": [], "value": []},
-            )
-        ]
+                {"attrs": [], "values": []},
+            ),
+        ],
     }
 
     metadata_dict_start_idx = DefaultDict(dict)
@@ -1057,44 +1062,50 @@ def test_idx_order():
     for metadata_node in metadata:
         metadata_dict_start_idx[metadata_node.char_start_idx][
             metadata_node.relative_start_pos
-        ] = (metadata_node.value.tag, metadata_node.value.attrs)
+        ] = (
+            metadata_node.value.tag,
+            metadata_node.value.attrs,
+        )
         metadata_dict_end_idx[metadata_node.char_end_idx][
             metadata_node.relative_end_pos
-        ] = (metadata_node.value.tag, metadata_node.value.attrs)
+        ] = (
+            metadata_node.value.tag,
+            metadata_node.value.attrs,
+        )
 
     metadata_sorted_by_start_idx_simplify_true = {
         0: {
-            0: ("body", {"attr": [], "value": []}),
-            1: ("h1", {"attr": ["id"], "value": ["title"]}),
+            0: ("body", {"attrs": [], "values": []}),
+            1: ("h1", {"attrs": ["id"], "values": ["title"]}),
         },
         29: {
-            0: ("br", {"attr": [], "value": []}),
-            2: ("div", {"attr": ["class", "id"], "value": ["div-level-1", "1"]}),
-            3: ("div", {"attr": ["class", "href"], "value": ["div-level-2", "http"]}),
-            4: ("div", {"attr": ["class"], "value": ["div-level-3"]}),
-            5: ("br", {"attr": [], "value": []}),
+            0: ("br", {"attrs": [], "values": []}),
+            2: ("div", {"attrs": ["class", "id"], "values": ["div-level-1", "1"]}),
+            3: ("div", {"attrs": ["class", "href"], "values": ["div-level-2", "http"]}),
+            4: ("div", {"attrs": ["class"], "values": ["div-level-3"]}),
+            5: ("br", {"attrs": [], "values": []}),
         },
-        44: {0: ("span", {"attr": ["id"], "value": ["3"]})},
-        50: {0: ("span", {"attr": ["id"], "value": ["2"]})},
+        44: {0: ("span", {"attrs": ["id"], "values": ["3"]})},
+        50: {0: ("span", {"attrs": ["id"], "values": ["2"]})},
     }
 
     metadata_sorted_by_end_idx_simplify_true = {
-        28: {0: ("h1", {"attr": ["id"], "value": ["title"]})},
+        28: {0: ("h1", {"attrs": ["id"], "values": ["title"]})},
         29: {
-            1: ("br", {"attr": [], "value": []}),
-            6: ("br", {"attr": [], "value": []}),
+            1: ("br", {"attrs": [], "values": []}),
+            6: ("br", {"attrs": [], "values": []}),
         },
         49: {
-            0: ("span", {"attr": ["id"], "value": ["3"]}),
-            1: ("div", {"attr": ["class"], "value": ["div-level-3"]}),
+            0: ("span", {"attrs": ["id"], "values": ["3"]}),
+            1: ("div", {"attrs": ["class"], "values": ["div-level-3"]}),
         },
         71: {
-            0: ("span", {"attr": ["id"], "value": ["2"]}),
-            1: ("div", {"attr": ["class", "href"], "value": ["div-level-2", "http"]}),
+            0: ("span", {"attrs": ["id"], "values": ["2"]}),
+            1: ("div", {"attrs": ["class", "href"], "values": ["div-level-2", "http"]}),
         },
         72: {
-            0: ("div", {"attr": ["class", "id"], "value": ["div-level-1", "1"]}),
-            1: ("body", {"attr": [], "value": []}),
+            0: ("div", {"attrs": ["class", "id"], "values": ["div-level-1", "1"]}),
+            1: ("body", {"attrs": [], "values": []}),
         },
     }
 
@@ -1107,3 +1118,33 @@ def test_idx_order():
         metadata=metadata,
         plain_text=plain_text,
     )
+
+
+def test_convert_br_tag():
+    html = "<html><body>" "first line<br>" "second line" "</body></html>"
+    plain_text, metadata = get_clean_text_and_metadata(
+        html, convert_br_tag_to_breaking_line=True
+    )
+    assert plain_text == "first line\nsecond line\n"
+    assert "br" not in [html_tag.value.tag for html_tag in metadata]
+
+    html = "<html><body>" "first line<br><br><br>" "second line" "</body></html>"
+    plain_text, metadata = get_clean_text_and_metadata(
+        html, convert_br_tag_to_breaking_line=True
+    )
+    assert plain_text == "first line\n\n\nsecond line\n"
+    assert "br" not in [html_tag.value.tag for html_tag in metadata]
+
+    html = "<html><body>" "first line<br><br><br>" "second line" "</body></html>"
+    plain_text, metadata = get_clean_text_and_metadata(
+        html,
+    )
+    assert plain_text == "first line\nsecond line\n"
+    assert "br" in [html_tag.value.tag for html_tag in metadata]
+
+    html = "<html><body>" "first line<br />" "second line" "</body></html>"
+    plain_text, metadata = get_clean_text_and_metadata(
+        html, convert_br_tag_to_breaking_line=True
+    )
+    assert plain_text == "first line\nsecond line\n"
+    assert "br" not in [html_tag.value.tag for html_tag in metadata]

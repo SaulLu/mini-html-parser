@@ -135,8 +135,8 @@ class AttributeCleaner:
             attrbs = [attr for attr, value in attrs if self._test(attr)]
             values = [value for attr, value in attrs if self._test(attr)]
             return {
-                "attr": attrbs,
-                "value": values,
+                "attrs": attrbs,
+                "values": values,
             }
         else:
             attrs = dict(attrs)
@@ -144,8 +144,8 @@ class AttributeCleaner:
             attrbs = [attr for attr, value in attrs.items() if self._test(attr)]
             values = [value for attr, value in attrs.items() if self._test(attr)]
             return {
-                "attr": attrbs,
-                "value": values,
+                "attrs": attrbs,
+                "values": values,
             }
 
 
@@ -239,6 +239,7 @@ class TagFilter:
 class ConsecutiveTagCleaner:
     def __init__(
         self,
+        block_elements: list,
         consecutive_tags_to_fold: Optional[List[str]],
     ):
         self.consecutive_tags_to_fold = (
@@ -250,6 +251,7 @@ class ConsecutiveTagCleaner:
         self.fake_tag_inline = FAKE_TAG_INLINE
         self.fake_tag_basic = FAKE_TAG_BASIC
         self.attrib_separator = " "
+        self.block_elements = block_elements
 
     def __call__(self, root):
         tag = root.tag
@@ -264,7 +266,7 @@ class ConsecutiveTagCleaner:
             and root[0].tag == root.attrib["previous_tag"]
         ):  # has 1 child
 
-            if tag in BLOCK_ELEMENTS:
+            if tag in self.block_elements:
                 root[0].tag = self.fake_tag_block
             elif tag in INLINE_ELEMENTS_SPACING:
                 root[0].tag = self.fake_tag_inline
@@ -342,34 +344,43 @@ class TextAndMetadataCleaner:
         attrs_to_keep: Optional[List[str]] = None,
         start_parsing_at_tag: Optional[str] = "body",
         consecutive_tags_to_fold: Optional[List[str]] = None,
+        convert_br_tag_to_breaking_line: Optional[bool] = False,
     ):
         self.html_str = html_str
         self.tags_to_remove_with_content = tags_to_remove_with_content
         self.tags_to_remove_alone = tags_to_remove_alone
         self.attrs_to_keep = attrs_to_keep
         self.start_parsing_at_tag = start_parsing_at_tag
+        self.convert_br_tag_to_breaking_line = convert_br_tag_to_breaking_line
 
-        self.consecutive_tag_cleaner = ConsecutiveTagCleaner(
-            consecutive_tags_to_fold=consecutive_tags_to_fold
-        )
-
-        tags_to_remove_alone = (
+        self.tags_to_remove_alone = (
             [
                 TagToRemove(FAKE_TAG_BLOCK),
                 TagToRemove(FAKE_TAG_INLINE),
                 TagToRemove(FAKE_TAG_BASIC),
             ]
-            if tags_to_remove_alone is None
-            else tags_to_remove_alone
+            if self.tags_to_remove_alone is None
+            else self.tags_to_remove_alone
             + [
                 TagToRemove(FAKE_TAG_BLOCK),
                 TagToRemove(FAKE_TAG_INLINE),
                 TagToRemove(FAKE_TAG_BASIC),
             ]
         )
+
+        self.block_elements = BLOCK_ELEMENTS.copy()
+        if self.convert_br_tag_to_breaking_line:
+            self.block_elements.remove("br")
+            self.tags_to_remove_alone.append(TagToRemove("br"))
+
+        self.consecutive_tag_cleaner = ConsecutiveTagCleaner(
+            block_elements=self.block_elements,
+            consecutive_tags_to_fold=consecutive_tags_to_fold,
+        )
+
         self.attribute_cleaner = AttributeCleaner(attrs_to_keep=attrs_to_keep)
         self.tag_filter = TagFilter(
-            tags_to_remove_alone=tags_to_remove_alone,
+            tags_to_remove_alone=self.tags_to_remove_alone,
             tags_to_remove_with_content=tags_to_remove_with_content,
         )
 
@@ -416,6 +427,10 @@ class TextAndMetadataCleaner:
 
         return plain_text, self.metadata
 
+    def _br_conversion(self, tag):
+        if tag == "br":
+            self.text += "\n"
+
     def _clean_relative_pos(self, metadata):
         metadata_dict_idx = DefaultDict(dict)
         for metadata_node in metadata:
@@ -439,7 +454,7 @@ class TextAndMetadataCleaner:
                     idx += 1
 
     def _add_text(self, tag, new_text):
-        if tag in BLOCK_ELEMENTS:
+        if tag in self.block_elements:
             self.text = self._append_block_separator(self.text)
         elif tag in INLINE_ELEMENTS_SPACING:
             self.text = self._append_inline_element_separator(self.text)
@@ -493,7 +508,6 @@ class TextAndMetadataCleaner:
     def _get_text_and_metadata(self, root):
         self.current_tag = root.tag
 
-
         metadata_node = Metadata(
             char_start_idx=self._current_char_idx,
             relative_start_pos=self._current_num_metadata_by_idx[
@@ -503,6 +517,9 @@ class TextAndMetadataCleaner:
         )
 
         self._current_num_metadata_by_idx[self._current_char_idx] += 1
+
+        if self.convert_br_tag_to_breaking_line:
+            self._br_conversion(root.tag)
 
         self._add_text(root.tag, root.text)
         for idx, child in enumerate(root):
@@ -556,6 +573,7 @@ def get_clean_text_and_metadata(
     tags_to_remove_alone: Optional[List[str]] = None,
     attrs_to_keep: Optional[List[str]] = None,
     consecutive_tags_to_fold: Optional[List[str]] = None,
+    convert_br_tag_to_breaking_line: Optional[bool] = False,
 ):
     text_and_metadata_cleaner = TextAndMetadataCleaner(
         html_str=html_str,
@@ -564,5 +582,6 @@ def get_clean_text_and_metadata(
         attrs_to_keep=attrs_to_keep,
         start_parsing_at_tag="body",
         consecutive_tags_to_fold=consecutive_tags_to_fold,
+        convert_br_tag_to_breaking_line=convert_br_tag_to_breaking_line,
     )
     return text_and_metadata_cleaner.apply()
