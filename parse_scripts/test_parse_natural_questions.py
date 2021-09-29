@@ -51,6 +51,10 @@ def test_wiki_webpage():
 
     plain_text, metadata = json_example["text"], json_example["metadata"]
 
+    # target_path = "parse_scripts/data_test/wiki_page_text_extracted.txt"
+    # with open(target_path, "w") as f:
+    #     f.write(plain_text)
+
     # target_path = "parse_scripts/data_test/wiki_page_metadata.jsonl"
     # with open(target_path, "r") as fi_target:
     #     writer = jsonlines.Writer(fi_target)
