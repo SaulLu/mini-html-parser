@@ -154,7 +154,20 @@ class TagFilter:
         self,
         tags_to_remove_alone: Optional[List[TagToRemove]],
         tags_to_remove_with_content: Optional[List[TagToRemoveWithContent]],
+        txt_max_chr_len_alone: Optional[float] = -float("inf"),
+        txt_min_chr_len_alone: Optional[float] = -float("inf"),
+        tags_exceptions_alone: Optional[List[str]] = None,
+        txt_max_chr_len_with_content: Optional[float] = -float("inf"),
+        txt_min_chr_len_with_content: Optional[float] = -float("inf"),
+        tags_exceptions_with_content: Optional[List[str]] = None,
     ):
+        self.txt_max_chr_len_alone = txt_max_chr_len_alone
+        self.txt_min_chr_len_alone = txt_min_chr_len_alone
+        self.tags_exceptions_alone = tags_exceptions_alone if tags_exceptions_alone is not None else []
+        self.txt_max_chr_len_with_content = txt_max_chr_len_with_content
+        self.txt_min_chr_len_with_content = txt_min_chr_len_with_content
+        self.tags_exceptions_with_content = tags_exceptions_with_content if tags_exceptions_with_content is not None else []
+
         self.tags_to_remove_alone = (
             {tag_to_remove.tag: tag_to_remove for tag_to_remove in tags_to_remove_alone}
             if isinstance(tags_to_remove_alone, list)
@@ -181,41 +194,57 @@ class TagFilter:
 
     def drop_tag(self, metadata_node):
         tag = str(metadata_node.value.tag)
-        if tag not in self.tags_to_remove_alone:
-            return False
 
-        tag_to_remove_characteristics = self.tags_to_remove_alone[tag]
+        drop_tag = False
         content_char_length = (
             metadata_node.char_end_idx - metadata_node.char_start_idx
             if metadata_node.char_end_idx is not None
             else 0
         )
+
         if (
-            content_char_length <= tag_to_remove_characteristics.content_max_char_length
-            and content_char_length
-            >= tag_to_remove_characteristics.content_min_char_length
+            tag in self.tags_to_remove_alone
+            and content_char_length <= self.tags_to_remove_alone[tag].content_max_char_length
+            and content_char_length >= self.tags_to_remove_alone[tag].content_min_char_length
         ):
-            return True
+            drop_tag = True
+
+        if tag not in self.tags_exceptions_alone:
+            if (
+                content_char_length <= self.txt_max_chr_len_alone
+                and content_char_length >= self.txt_min_chr_len_alone
+            ):
+                drop_tag = True
+
         # raise TypeError(f"tag need to be a string not a {type(tag)}")
-        return False
+        return drop_tag
 
     def drop_tag_and_content_top_down(self, tag: str, text: str):
-        if tag not in self.tags_to_remove_with_content:
+        if (
+            tag in self.tags_to_remove_with_content
+            and self.tags_to_remove_with_content[tag].method != "top-down"
+        ):
             return False
 
-        tag_to_remove_characteristics = self.tags_to_remove_with_content[tag]
-        if tag_to_remove_characteristics.method != "top-down":
-            return False
-
+        drop_tag = False
         content_char_length = len(text)
         if (
-            content_char_length <= tag_to_remove_characteristics.content_max_char_length
+            tag in self.tags_to_remove_with_content
             and content_char_length
-            >= tag_to_remove_characteristics.content_min_char_length
+            <= self.tags_to_remove_with_content[tag].content_max_char_length
+            and content_char_length
+            >= self.tags_to_remove_with_content[tag].content_min_char_length
         ):
-            return True
-
-        return False
+            drop_tag = True
+        
+        if tag not in self.tags_exceptions_with_content:
+            if (
+                content_char_length <= self.txt_max_chr_len_with_content
+                and content_char_length >= self.txt_min_chr_len_with_content
+            ):
+                drop_tag = True
+                print(tag, text)
+        return drop_tag
 
     def drop_tag_and_content_bottom_up(self, tag: str, text: str):
         if tag not in self.tags_to_remove_with_content:
@@ -345,6 +374,12 @@ class TextAndMetadataCleaner:
         start_parsing_at_tag: Optional[str] = "body",
         consecutive_tags_to_fold: Optional[List[str]] = None,
         convert_br_tag_to_breaking_line: Optional[bool] = False,
+        txt_max_chr_len_alone: float = -float("inf"),
+        txt_min_chr_len_alone: float = -float("inf"),
+        tags_exceptions_to_txt_max_min_chr_len_alone: List[str] = None,
+        txt_max_chr_len_with_content: float = -float("inf"),
+        txt_min_chr_len_with_content: float = -float("inf"),
+        tags_exceptions_to_txt_max_min_chr_len_with_content: List[str] = None,
     ):
         self.html_str = html_str
         self.tags_to_remove_with_content = tags_to_remove_with_content
@@ -380,6 +415,12 @@ class TextAndMetadataCleaner:
 
         self.attribute_cleaner = AttributeCleaner(attrs_to_keep=attrs_to_keep)
         self.tag_filter = TagFilter(
+            txt_max_chr_len_alone=txt_max_chr_len_alone,
+            txt_min_chr_len_alone=txt_min_chr_len_alone,
+            tags_exceptions_alone=tags_exceptions_to_txt_max_min_chr_len_alone,
+            txt_max_chr_len_with_content=txt_max_chr_len_with_content,
+            txt_min_chr_len_with_content=txt_min_chr_len_with_content,
+            tags_exceptions_with_content=tags_exceptions_to_txt_max_min_chr_len_with_content,
             tags_to_remove_alone=self.tags_to_remove_alone,
             tags_to_remove_with_content=tags_to_remove_with_content,
         )
@@ -574,6 +615,12 @@ def get_clean_text_and_metadata(
     attrs_to_keep: Optional[List[str]] = None,
     consecutive_tags_to_fold: Optional[List[str]] = None,
     convert_br_tag_to_breaking_line: Optional[bool] = False,
+    txt_max_chr_len_alone: float = -float("inf"),
+    txt_min_chr_len_alone: float = -float("inf"),
+    tags_exceptions_to_txt_max_min_chr_len_alone: List[str] = None,
+    txt_max_chr_len_with_content: float = -float("inf"),
+    txt_min_chr_len_with_content: float = -float("inf"),
+    tags_exceptions_to_txt_max_min_chr_len_with_content: List[str] = None,
 ):
     text_and_metadata_cleaner = TextAndMetadataCleaner(
         html_str=html_str,
@@ -583,5 +630,11 @@ def get_clean_text_and_metadata(
         start_parsing_at_tag="body",
         consecutive_tags_to_fold=consecutive_tags_to_fold,
         convert_br_tag_to_breaking_line=convert_br_tag_to_breaking_line,
+        txt_max_chr_len_alone=txt_max_chr_len_alone,
+        txt_min_chr_len_alone=txt_min_chr_len_alone,
+        tags_exceptions_to_txt_max_min_chr_len_alone=tags_exceptions_to_txt_max_min_chr_len_alone,
+        txt_max_chr_len_with_content=txt_max_chr_len_with_content,
+        txt_min_chr_len_with_content=txt_min_chr_len_with_content,
+        tags_exceptions_to_txt_max_min_chr_len_with_content=tags_exceptions_to_txt_max_min_chr_len_with_content,
     )
     return text_and_metadata_cleaner.apply()
